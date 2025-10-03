@@ -1,26 +1,45 @@
-import sys, pathlib, json
+# app/main.py
+import sys
+import json
 from pathlib import Path
 
-# --- 直実行でも -m 実行でも通るようにパス調整 ---
+# --- 直実行でも -m 実行でもインポートが通るようにパス調整 ---
 if __package__ is None or __package__ == "":
-    sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from app.gui.app_shell import run_app
 
-def load_config():
-    # app/main.py → [..]/kao_kintai_app がルート
-    project_root = Path(__file__).resolve().parents[1]
-    cfg_path = project_root / "config" / "app_config.json"
+DEFAULT_CONFIG = {
+    "app_name": "Kao-Kintai (Skeleton)"
+}
+
+def _project_root() -> Path:
+    """
+    開発時: リポジトリのルート
+    exe化後(PyInstaller): 実行ファイルのあるディレクトリ
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[1]
+
+def load_config() -> dict:
+    root = _project_root()
+    cfg_path = root / "config" / "app_config.json"
     cfg_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not cfg_path.exists():
-        # 最小のデフォルト設定を自動生成
-        default = {"app_name": "Kao-Kintai (Skeleton)"}
-        cfg_path.write_text(json.dumps(default, ensure_ascii=False, indent=2), encoding="utf-8")
+        cfg_path.write_text(
+            json.dumps(DEFAULT_CONFIG, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
 
-    return json.loads(cfg_path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(cfg_path.read_text(encoding="utf-8"))
+    except Exception:
+        # 破損していた場合はデフォルトで起動
+        return DEFAULT_CONFIG.copy()
 
-def main():
+def main() -> None:
     cfg = load_config()
     run_app(cfg)
 
