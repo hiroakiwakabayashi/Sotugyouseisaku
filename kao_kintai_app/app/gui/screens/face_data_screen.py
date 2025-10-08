@@ -8,6 +8,7 @@ from PIL import Image, ImageTk
 
 from app.infra.db.employee_repo import EmployeeRepo
 from app.infra.storage.face_store import FaceStore
+from app.services.config_service import ConfigService
 
 
 class FaceDataScreen(ctk.CTkFrame):
@@ -27,10 +28,14 @@ class FaceDataScreen(ctk.CTkFrame):
         )
 
         # ------------------ しきい値 ------------------
-        self.MIN_AREA_RATIO = 0.12     # 顔の面積/フレーム >= 12%
-        self.MIN_BLUR_VAR = 100.0      # ぼけ（Laplacian var）
-        self.BRIGHT_MIN = 60           # 明るさ下限（0-255）
-        self.BRIGHT_MAX = 190          # 明るさ上限
+        # __init__ のしきい値初期化を置き換え
+        cfg = ConfigService().get_vision()
+        self.MIN_AREA_RATIO = float(cfg["min_area_ratio"])
+        self.MIN_BLUR_VAR   = float(cfg["min_blur_var"])
+        self.BRIGHT_MIN     = int(cfg["bright_min"])
+        self.BRIGHT_MAX     = int(cfg["bright_max"])
+        # REQUIRED_OK_FRAMES などはそのままでもOK（必要なら設定化可）
+
         self.REQUIRED_OK_FRAMES = 1    # 連続OKフレーム数
         self.ok_streak = 0
 

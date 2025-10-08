@@ -11,6 +11,8 @@ from PIL import Image, ImageTk
 
 from app.infra.db.employee_repo import EmployeeRepo
 from app.infra.db.attendance_repo import AttendanceRepo
+from app.services.config_service import ConfigService
+
 
 
 class FaceClockScreen(ctk.CTkFrame):
@@ -42,9 +44,15 @@ class FaceClockScreen(ctk.CTkFrame):
         self.BRIGHT_MAX     = 190
 
         # 認識（マッチ閾値）
-        self.MATCH_THRESHOLD = 24    # 「よいマッチ」の最低数（経験則）
-        self.TOP_K_IMAGES    = 5     # 各従業員につき最新N枚を学習に使用
-        self.RECOG_INTERVAL  = 3     # Nフレームに1回認識（軽量化）
+        cfg = ConfigService().get_vision()
+        self.MIN_AREA_RATIO = float(cfg["min_area_ratio"])
+        self.MIN_BLUR_VAR   = float(cfg["min_blur_var"])
+        self.BRIGHT_MIN     = int(cfg["bright_min"])
+        self.BRIGHT_MAX     = int(cfg["bright_max"])
+
+        self.MATCH_THRESHOLD = int(cfg["match_threshold"])
+        self.TOP_K_IMAGES    = int(cfg["top_k_images"])
+        self.RECOG_INTERVAL  = int(cfg["recog_interval"])
 
         self.frame_count = 0
         self.last_best = ("", 0)     # (code, matches)
