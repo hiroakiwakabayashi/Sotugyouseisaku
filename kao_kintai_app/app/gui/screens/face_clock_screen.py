@@ -1,3 +1,6 @@
+import os
+print("[DEBUG] Loaded FaceClockScreen from:", os.path.abspath(__file__))
+
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import messagebox
@@ -12,6 +15,9 @@ from app.infra.db.employee_repo import EmployeeRepo
 from app.infra.db.attendance_repo import AttendanceRepo
 from app.services.attendance_service import AttendanceService
 from app.services.config_service import ConfigService
+
+import os
+print("Loaded FaceClockScreen from:", os.path.abspath(__file__))
 
 
 class FaceClockScreen(ctk.CTkFrame):

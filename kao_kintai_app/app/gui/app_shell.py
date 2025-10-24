@@ -49,28 +49,34 @@ class AppShell(ctk.CTkFrame):
         self.show("home")
 
     def show(self, key: str):
-        # 既存の子ウィジェットを破棄して差し替え
+        # --- 現在の画面を完全に破棄 ---
         for child in self.content.winfo_children():
             child.destroy()
-
+            
+        # --- それ以外の画面は通常通り ---
         if key == "home":
-            self._screens[key] = HomeScreen(self.content)
+            screen = HomeScreen(self.content)
         elif key == "face":
-            self._screens[key] = FaceClockScreen(self.content)   # いまはプレースホルダー版
+            import importlib
+            from gui.screens import face_clock_screen
+            importlib.reload(face_clock_screen)
+            FaceClockScreen = face_clock_screen.FaceClockScreen
+            self._screens[key] = FaceClockScreen(self.content)
         elif key == "list":
-            self._screens[key] = AttendanceListScreen(self.content)
+            screen = AttendanceListScreen(self.content)
         elif key == "my":
-            self._screens[key] = MyAttendanceScreen(self.content)
+            screen = MyAttendanceScreen(self.content)
         elif key == "admin":
             def to_menu():
                 for c in self.content.winfo_children():
                     c.destroy()
                 AdminMenuScreen(self.content).grid(row=0, column=0, sticky="nsew")
-            self._screens[key] = AdminLoginScreen(self.content, switch_to_menu_callback=to_menu)
+            screen = AdminLoginScreen(self.content, switch_to_menu_callback=to_menu)
         else:
-            self._screens[key] = HomeScreen(self.content)
+            screen = HomeScreen(self.content)
 
-        self._screens[key].grid(row=0, column=0, sticky="nsew")
+        screen.grid(row=0, column=0, sticky="nsew")
+        self._screens[key] = screen
 
 
 def run_app(cfg: dict):
