@@ -1,5 +1,8 @@
 import customtkinter as ctk
 
+#　全体を白で統一する
+ctk.set_appearance_mode("Light")
+
 class HomeScreen(ctk.CTkFrame):
     def __init__(self, master):
         super().__init__(master)
