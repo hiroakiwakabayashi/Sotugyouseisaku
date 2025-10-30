@@ -7,7 +7,7 @@ from .screens.attendance_list_screen import AttendanceListScreen
 from .screens.admin_menu_screen import AdminMenuScreen
 from .screens.my_attendance_screen import MyAttendanceScreen
 from .screens.admin_login_screen import AdminLoginScreen
-from .screens.admin_menu_screen import AdminMenuScreen
+from app.services.config_service import ConfigService
 
 class AppShell(ctk.CTkFrame):
     def __init__(self, master, cfg: dict):
@@ -23,16 +23,18 @@ class AppShell(ctk.CTkFrame):
         self.nav.grid(row=0, column=0, sticky="nsw")
         self.nav.grid_propagate(False)
 
-        title = ctk.CTkLabel(self.nav, text=cfg.get("app_name", "Kao-Kintai"),
-                            font=("Meiryo UI", 18, "bold"))
-        title.pack(padx=16, pady=(16, 8), anchor="w")
+        # タイトル（設定から）
+        app_name = ConfigService().get_app_name()
+        ctk.CTkLabel(self.nav, text=app_name, font=("Meiryo UI", 16, "bold")).pack(
+            anchor="w", padx=12, pady=(8, 6)
+        )
 
-        self.btn_home = ctk.CTkButton(self.nav, text="🏠 ホーム", command=lambda: self.show("home"))
-        self.btn_face = ctk.CTkButton(self.nav, text="📷 顔認証 打刻", command=lambda: self.show("face"))
-        self.btn_list = ctk.CTkButton(self.nav, text="📑 勤怠一覧", command=lambda: self.show("list"))
-        self.btn_my   = ctk.CTkButton(self.nav, text="👤 マイ勤怠", command=lambda: self.show("my"))
-        self.btn_admin= ctk.CTkButton(self.nav, text="🛠 管理者", command=lambda: self.show("admin"))
-
+        # ナビボタン
+        self.btn_home  = ctk.CTkButton(self.nav, text="🏠 ホーム",      command=lambda: self.show("home"))
+        self.btn_face  = ctk.CTkButton(self.nav, text="📷 顔認証 打刻", command=lambda: self.show("face"))
+        self.btn_list  = ctk.CTkButton(self.nav, text="📑 勤怠一覧",     command=lambda: self.show("list"))
+        self.btn_my    = ctk.CTkButton(self.nav, text="👤 マイ勤怠",     command=lambda: self.show("my"))
+        self.btn_admin = ctk.CTkButton(self.nav, text="🛠 管理者",       command=lambda: self.show("admin"))
         for w in (self.btn_home, self.btn_face, self.btn_list, self.btn_my, self.btn_admin):
             w.pack(padx=16, pady=6, fill="x")
 
@@ -42,42 +44,43 @@ class AppShell(ctk.CTkFrame):
         self.content.grid_rowconfigure(0, weight=1)
         self.content.grid_columnconfigure(0, weight=1)
 
-        # 画面インスタンス（必要な時に作成）
-        self._screens = {}
+        # 画面キャッシュ
+        self._screens: dict[str, ctk.CTkFrame] = {}
 
-        # 既定はホーム
+        # 初期表示
         self.show("home")
 
     def show(self, key: str):
-        # 既存の子ウィジェットを破棄して差し替え
-        for child in self.content.winfo_children():
-            child.destroy()
+        """画面切替（必要に応じて遅延生成）"""
+        # 既にあれば再利用、なければ作成
+        if key not in self._screens:
+            if key == "home":
+                self._screens[key] = HomeScreen(self.content, show_callback=self.show)
+            elif key == "face":
+                self._screens[key] = FaceClockScreen(self.content)
+            elif key == "list":
+                self._screens[key] = AttendanceListScreen(self.content)
+            elif key == "my":
+                self._screens[key] = MyAttendanceScreen(self.content)
+            elif key == "admin":
+                def to_menu():
+                    self._screens["admin_menu"] = AdminMenuScreen(self.content)
+                    self._swap(self._screens["admin_menu"])
+                self._screens[key] = AdminLoginScreen(self.content, switch_to_menu_callback=to_menu)
+            else:
+                self._screens[key] = HomeScreen(self.content, show_callback=self.show)
 
-        if key == "home":
-            self._screens[key] = HomeScreen(self.content)
-        elif key == "face":
-            self._screens[key] = FaceClockScreen(self.content)   # いまはプレースホルダー版
-        elif key == "list":
-            self._screens[key] = AttendanceListScreen(self.content)
-        elif key == "my":
-            self._screens[key] = MyAttendanceScreen(self.content)
-        elif key == "admin":
-            def to_menu():
-                for c in self.content.winfo_children():
-                    c.destroy()
-                AdminMenuScreen(self.content).grid(row=0, column=0, sticky="nsew")
-            self._screens[key] = AdminLoginScreen(self.content, switch_to_menu_callback=to_menu)
-        else:
-            self._screens[key] = HomeScreen(self.content)
+        self._swap(self._screens[key])
 
-        self._screens[key].grid(row=0, column=0, sticky="nsew")
+    def _swap(self, frame: ctk.CTkFrame):
+        for w in self.content.winfo_children():
+            w.grid_forget()
+        frame.grid(row=0, column=0, sticky="nsew")
 
 
 def run_app(cfg: dict):
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
-
-    # スケーリング（高DPI向け）
     ctk.set_widget_scaling(1.1)
     ctk.set_window_scaling(1.1)
 
@@ -95,5 +98,4 @@ def run_app(cfg: dict):
 
     shell = AppShell(master=root, cfg=cfg)
     shell.pack(fill="both", expand=True)
-
     root.mainloop()

@@ -55,3 +55,8 @@ class ConfigService:
 
     def get_vision(self) -> Dict[str, Any]:
         return self.load()["vision"]
+    
+    def get_app_name(self) -> str:
+        cfg = self.load()
+        return cfg.get("app_name", "Kao-Kintai 勤怠")
+
