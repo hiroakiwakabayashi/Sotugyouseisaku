@@ -8,6 +8,72 @@ from app.infra.db.employee_repo import EmployeeRepo
 from app.infra.db.attendance_repo import AttendanceRepo
 
 
+from tkcalendar import Calendar
+
+class DatePickerEntry(ctk.CTkFrame):
+    """クリックでカレンダーを出すCTk対応の日付入力"""
+    def __init__(self, master, textvariable: tk.StringVar | None = None, width=130, placeholder_text="YYYY-MM-DD"):
+        super().__init__(master)
+        self.var = textvariable or tk.StringVar()
+        self.entry = ctk.CTkEntry(self, textvariable=self.var, width=width, placeholder_text=placeholder_text, state="readonly")
+        self.entry.pack(side="left", fill="x")
+        self.entry.bind("<Button-1>", self._open_popup)
+
+        self.btn = ctk.CTkButton(self, text="📅", width=34, command=self._open_popup)
+        self.btn.pack(side="left", padx=4)
+
+        self.popup = None
+
+    def _open_popup(self, event=None):
+        # すでに開いていたら閉じる
+        if self.popup and tk.Toplevel.winfo_exists(self.popup):
+            self.popup.destroy()
+
+        # 位置計算（エントリのすぐ下に出す）
+        x = self.entry.winfo_rootx()
+        y = self.entry.winfo_rooty() + self.entry.winfo_height()
+
+        self.popup = tk.Toplevel(self)
+        self.popup.wm_overrideredirect(True)   # 枠なし
+        self.popup.wm_geometry(f"+{x}+{y}")
+        self.popup.attributes("-topmost", True)
+
+        # 既存値を初期選択に反映
+        selected_date = None
+        try:
+            if self.var.get():
+                selected_date = datetime.strptime(self.var.get(), "%Y-%m-%d").date()
+        except Exception:
+            pass
+
+        cal = Calendar(
+            self.popup,
+            selectmode="day",
+            date_pattern="yyyy-mm-dd",  # ← 受け取り形式
+            year=(selected_date.year if selected_date else date.today().year),
+            month=(selected_date.month if selected_date else date.today().month),
+            day=(selected_date.day if selected_date else date.today().day),
+            locale="ja_JP",
+        )
+        cal.pack(padx=4, pady=4)
+
+        def on_ok():
+            self.var.set(cal.get_date())  # "YYYY-MM-DD"
+            self.popup.destroy()
+
+        def on_cancel():
+            self.popup.destroy()
+
+        btns = ctk.CTkFrame(self.popup)
+        btns.pack(fill="x", padx=4, pady=(0,4))
+        ctk.CTkButton(btns, text="OK", command=on_ok, width=60).pack(side="left", padx=4)
+        ctk.CTkButton(btns, text="キャンセル", command=on_cancel, width=80).pack(side="right", padx=4)
+
+        # フォーカス外れたら閉じる
+        self.popup.focus_force()
+        self.popup.bind("<FocusOut>", lambda e: self.popup.destroy())
+
+
 class AttendanceListScreen(ctk.CTkFrame):
     def __init__(self, master):
         super().__init__(master)
@@ -36,10 +102,10 @@ class AttendanceListScreen(ctk.CTkFrame):
         filt.grid_columnconfigure(9, weight=1)
 
         ctk.CTkLabel(filt, text="開始日").grid(row=0, column=0, padx=(8, 4), pady=6, sticky="e")
-        ctk.CTkEntry(filt, textvariable=self.start_var, width=130, placeholder_text="YYYY-MM-DD").grid(row=0, column=1, padx=(0, 12), pady=6, sticky="w")
+        DatePickerEntry(filt, textvariable=self.start_var, width=130).grid(row=0, column=1, padx=(0, 12), pady=6, sticky="w")
 
         ctk.CTkLabel(filt, text="終了日").grid(row=0, column=2, padx=(8, 4), pady=6, sticky="e")
-        ctk.CTkEntry(filt, textvariable=self.end_var, width=130, placeholder_text="YYYY-MM-DD").grid(row=0, column=3, padx=(0, 12), pady=6, sticky="w")
+        DatePickerEntry(filt, textvariable=self.end_var,   width=130).grid(row=0, column=3, padx=(0, 12), pady=6, sticky="w")
 
         ctk.CTkLabel(filt, text="従業員").grid(row=0, column=4, padx=(8, 4), pady=6, sticky="e")
         ctk.CTkOptionMenu(filt, values=self._employee_options(), variable=self.emp_var, width=220).grid(row=0, column=5, padx=(0, 12), pady=6, sticky="w")

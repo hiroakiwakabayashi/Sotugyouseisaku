@@ -40,6 +40,9 @@ class AdminLoginScreen(ctk.CTkFrame):
 
         self.id_error = ctk.CTkLabel(login_panel, text="", text_color="red", anchor="w")
         self.id_error.pack(pady=(0, 5), padx=60, fill="x")
+        
+        # ここを追加（IDでEnter → パスワード欄へフォーカス）
+        self.id_entry.bind("<Return>", lambda e: self.pw_entry.focus_set())
 
         # ===== パスワード入力 =====
         pw_label = ctk.CTkLabel(login_panel, text="パスワード", anchor="w", text_color="#333333")
@@ -50,6 +53,9 @@ class AdminLoginScreen(ctk.CTkFrame):
 
         self.pw_error = ctk.CTkLabel(login_panel, text="", text_color="red", anchor="w")
         self.pw_error.pack(pady=(0, 20), padx=60, fill="x")
+
+        # ここを追加（PWでEnter → ログイン実行）
+        self.pw_entry.bind("<Return>", lambda e: self.try_login())
 
         # ===== ボタンエリア =====
         btn_frame = ctk.CTkFrame(login_panel, fg_color="transparent")

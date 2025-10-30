@@ -8,6 +8,8 @@ import csv
 from app.infra.db.employee_repo import EmployeeRepo
 from app.infra.db.attendance_repo import AttendanceRepo
 
+
+
 class MyAttendanceScreen(ctk.CTkFrame):
     """
     本人の勤怠を閲覧・CSV出力（当面はプルダウンで自分を選択）
