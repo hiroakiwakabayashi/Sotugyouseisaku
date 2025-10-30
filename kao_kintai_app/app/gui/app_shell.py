@@ -4,10 +4,9 @@ import os
 from .screens.home_screen import HomeScreen
 from .screens.face_clock_screen import FaceClockScreen
 from .screens.attendance_list_screen import AttendanceListScreen
-from .screens.admin_menu_screen import AdminMenuScreen
 from .screens.my_attendance_screen import MyAttendanceScreen
 from .screens.admin_login_screen import AdminLoginScreen
-from app.services.config_service import ConfigService
+# AdminMenuScreen は使わず、ボタンだけ左下に出す方式に変更
 
 class AppShell(ctk.CTkFrame):
     def __init__(self, master, cfg: dict):
@@ -23,20 +22,22 @@ class AppShell(ctk.CTkFrame):
         self.nav.grid(row=0, column=0, sticky="nsw")
         self.nav.grid_propagate(False)
 
-        # タイトル（設定から）
-        app_name = ConfigService().get_app_name()
-        ctk.CTkLabel(self.nav, text=app_name, font=("Meiryo UI", 16, "bold")).pack(
-            anchor="w", padx=12, pady=(8, 6)
-        )
+        title = ctk.CTkLabel(self.nav, text=cfg.get("app_name", "Kao-Kintai"),
+                             font=("Meiryo UI", 18, "bold"))
+        title.pack(padx=16, pady=(16, 8), anchor="w")
 
-        # ナビボタン
-        self.btn_home  = ctk.CTkButton(self.nav, text="🏠 ホーム",      command=lambda: self.show("home"))
-        self.btn_face  = ctk.CTkButton(self.nav, text="📷 顔認証 打刻", command=lambda: self.show("face"))
+        self.btn_home  = ctk.CTkButton(self.nav, text="🏠 ホーム",       command=lambda: self.show("home"))
+        self.btn_face  = ctk.CTkButton(self.nav, text="📷 顔認証 打刻",   command=lambda: self.show("face"))
         self.btn_list  = ctk.CTkButton(self.nav, text="📑 勤怠一覧",     command=lambda: self.show("list"))
         self.btn_my    = ctk.CTkButton(self.nav, text="👤 マイ勤怠",     command=lambda: self.show("my"))
         self.btn_admin = ctk.CTkButton(self.nav, text="🛠 管理者",       command=lambda: self.show("admin"))
+
         for w in (self.btn_home, self.btn_face, self.btn_list, self.btn_my, self.btn_admin):
             w.pack(padx=16, pady=6, fill="x")
+
+        # ← ここがポイント：左下の“サブナビ”領域（管理者メニューをここに出す）
+        self.subnav = ctk.CTkFrame(self.nav, fg_color="transparent")
+        self.subnav.pack(padx=8, pady=(8, 12), fill="x", anchor="n")
 
         # --- 右コンテンツ ---
         self.content = ctk.CTkFrame(self)
@@ -44,38 +45,85 @@ class AppShell(ctk.CTkFrame):
         self.content.grid_rowconfigure(0, weight=1)
         self.content.grid_columnconfigure(0, weight=1)
 
-        # 画面キャッシュ
-        self._screens: dict[str, ctk.CTkFrame] = {}
+        # 画面インスタンス（必要な時に作成）
+        self._screens = {}
 
-        # 初期表示
+        # 既定はホーム
         self.show("home")
 
+    # サブナビを空にする
+    def _clear_subnav(self):
+        for w in self.subnav.winfo_children():
+            w.destroy()
+
+    # サブナビに管理者メニューを描画
+    def _build_admin_subnav(self):
+        self._clear_subnav()
+        ctk.CTkLabel(self.subnav, text="🛠 管理者メニュー", font=("Meiryo UI", 14, "bold"))\
+            .pack(padx=8, pady=(6, 4), anchor="w")
+
+        # 右側に出す画面切替ハンドラ
+        def show_emp():
+            from .screens.employee_register_screen import EmployeeRegisterScreen
+            self._swap_right(EmployeeRegisterScreen(self.content))
+        def show_face():
+            from .screens.face_data_screen import FaceDataScreen
+            self._swap_right(FaceDataScreen(self.content))
+        def show_att():
+            from .screens.attendance_list_screen import AttendanceListScreen
+            self._swap_right(AttendanceListScreen(self.content))
+        def show_cam():
+            from .screens.camera_settings_screen import CameraSettingsScreen
+            self._swap_right(CameraSettingsScreen(self.content))
+        def show_acct():
+            from .screens.admin_account_screen import AdminAccountScreen
+            self._swap_right(AdminAccountScreen(self.content))
+
+        btns = [
+            ("👥 従業員登録 / 編集", show_emp),
+            ("🖼 顔データ管理",       show_face),
+            ("📑 勤怠一覧 / 検索",    show_att),
+            ("🎥 カメラ・顔認証設定",  show_cam),
+            ("🔐 管理者アカウント",   show_acct),
+        ]
+        for label, cmd in btns:
+            ctk.CTkButton(self.subnav, text=label, command=cmd)\
+                .pack(padx=8, pady=4, fill="x")
+
+    # 右ペインの差し替え
+    def _swap_right(self, widget: ctk.CTkFrame):
+        for child in self.content.winfo_children():
+            child.destroy()
+        widget.grid(row=0, column=0, sticky="nsew")
+
     def show(self, key: str):
-        """画面切替（必要に応じて遅延生成）"""
-        # 既にあれば再利用、なければ作成
-        if key not in self._screens:
-            if key == "home":
-                self._screens[key] = HomeScreen(self.content, show_callback=self.show)
-            elif key == "face":
-                self._screens[key] = FaceClockScreen(self.content)
-            elif key == "list":
-                self._screens[key] = AttendanceListScreen(self.content)
-            elif key == "my":
-                self._screens[key] = MyAttendanceScreen(self.content)
-            elif key == "admin":
-                def to_menu():
-                    self._screens["admin_menu"] = AdminMenuScreen(self.content)
-                    self._swap(self._screens["admin_menu"])
-                self._screens[key] = AdminLoginScreen(self.content, switch_to_menu_callback=to_menu)
-            else:
-                self._screens[key] = HomeScreen(self.content, show_callback=self.show)
+        # 右側まずクリア
+        for child in self.content.winfo_children():
+            child.destroy()
+        # サブナビも一旦クリア
+        self._clear_subnav()
 
-        self._swap(self._screens[key])
+        if key == "home":
+            self._screens[key] = HomeScreen(self.content)
+        elif key == "face":
+            self._screens[key] = FaceClockScreen(self.content)
+        elif key == "list":
+            self._screens[key] = AttendanceListScreen(self.content)
+        elif key == "my":
+            self._screens[key] = MyAttendanceScreen(self.content)
+        elif key == "admin":
+            # まず管理者ログインを右側に表示
+            def to_menu():
+                # ログインOK後：左下に管理者メニューを展開し、デフォルトで従業員登録を表示
+                self._build_admin_subnav()
+                from .screens.employee_register_screen import EmployeeRegisterScreen
+                self._swap_right(EmployeeRegisterScreen(self.content))
 
-    def _swap(self, frame: ctk.CTkFrame):
-        for w in self.content.winfo_children():
-            w.grid_forget()
-        frame.grid(row=0, column=0, sticky="nsew")
+            self._screens[key] = AdminLoginScreen(self.content, switch_to_menu_callback=to_menu)
+        else:
+            self._screens[key] = HomeScreen(self.content)
+
+        self._screens[key].grid(row=0, column=0, sticky="nsew")
 
 
 def run_app(cfg: dict):
@@ -98,4 +146,5 @@ def run_app(cfg: dict):
 
     shell = AppShell(master=root, cfg=cfg)
     shell.pack(fill="both", expand=True)
+
     root.mainloop()
