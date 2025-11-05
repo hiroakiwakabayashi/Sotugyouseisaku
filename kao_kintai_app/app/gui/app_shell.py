@@ -8,6 +8,7 @@ from .screens.attendance_list_screen import AttendanceListScreen
 from .screens.my_attendance_screen import MyAttendanceScreen
 from .screens.admin_login_screen import AdminLoginScreen
 
+
 class AppShell(ctk.CTkFrame):
     def __init__(self, master, cfg: dict):
         super().__init__(master)
@@ -93,14 +94,14 @@ class AppShell(ctk.CTkFrame):
         from .screens.face_data_screen import FaceDataScreen
         from .screens.attendance_list_screen import AttendanceListScreen
         from .screens.camera_settings_screen import CameraSettingsScreen
-        from .screens.admin_account_screen import AdminAccountScreen
-
+        from .screens.admin_account_register_screen import AdminAccountRegisterScreen
+        
         btns = [
             ("👥 従業員登録 / 編集", lambda: self._swap_right(EmployeeRegisterScreen)),
             ("🖼 顔データ管理",       lambda: self._swap_right(FaceDataScreen)),
             ("📑 勤怠一覧 / 検索",    lambda: self._swap_right(AttendanceListScreen)),
             ("🎥 カメラ・顔認証設定",  lambda: self._swap_right(CameraSettingsScreen)),
-            ("🔐 管理者アカウント",   lambda: self._swap_right(AdminAccountScreen)),
+            ("🔐 管理者アカウント",   lambda: self._swap_right(AdminAccountRegisterScreen)),
         ]
 
         for label, cmd in btns:

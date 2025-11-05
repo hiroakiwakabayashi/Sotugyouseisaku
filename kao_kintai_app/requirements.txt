@@ -12,3 +12,4 @@ opencv-python
 Pillow
 numpy
 tkcalendar
+bcrypt>=4.1.2

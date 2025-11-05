@@ -53,9 +53,9 @@ class AdminMenuScreen(ctk.CTkFrame):
             from .camera_settings_screen import CameraSettingsScreen
             screen = CameraSettingsScreen(self.content)
         elif key == "acct":
-            from .admin_account_screen import AdminAccountScreen
-            screen = AdminAccountScreen(self.content)
+            from .admin_account_register_screen import AdminAccountRegisterScreen
+            screen = AdminAccountRegisterScreen(self.content)
         else:
-            screen = ctk.CTkLabel(self.content, text="Not Implemented")
-
+            screen = ctk.CTkFrame(self.content)
+            ctk.CTkLabel(screen, text=f"🧩 未実装: {key}").pack(padx=16, pady=16)
         screen.grid(row=0, column=0, sticky="nsew")
