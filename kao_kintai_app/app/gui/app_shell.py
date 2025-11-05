@@ -28,7 +28,7 @@ class AppShell(ctk.CTkFrame):
         self.nav.grid_propagate(False)
 
         ctk.CTkLabel(self.nav, text=cfg.get("app_name", "Kao-Kintai"),
-                     font=("Meiryo UI", 18, "bold")).pack(padx=16, pady=(16, 8), anchor="w")
+                    font=("Meiryo UI", 18, "bold")).pack(padx=16, pady=(16, 8), anchor="w")
 
         for text, key in [
             ("🏠 ホーム", "home"),
@@ -168,7 +168,7 @@ class AppShell(ctk.CTkFrame):
 
 def run_app(cfg: dict):
     # テーマとスケール（DPI二重拡大を避けるため1.0固定）
-    ctk.set_appearance_mode("dark")
+    ctk.set_appearance_mode("light")
     ctk.set_default_color_theme("blue")
     ctk.set_widget_scaling(1.0)
     ctk.set_window_scaling(1.0)
