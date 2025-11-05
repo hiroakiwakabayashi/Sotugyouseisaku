@@ -7,6 +7,10 @@
     "bright_max": 190,
     "match_threshold": 24,
     "top_k_images": 5,
-    "recog_interval": 3
+    "recog_interval": 3,
+    "unknown_margin_ratio": 0.25,  
+    "unknown_min_gap": 8,          
+    "id_ok_frames": 2,
+    "unknown_cooldown": 30
   }
 }
