@@ -7,15 +7,16 @@ import csv
 from app.infra.db.employee_repo import EmployeeRepo
 from app.infra.db.attendance_repo import AttendanceRepo
 
-
 from tkcalendar import Calendar
+
 
 class DatePickerEntry(ctk.CTkFrame):
     """クリックでカレンダーを出すCTk対応の日付入力"""
     def __init__(self, master, textvariable: tk.StringVar | None = None, width=130, placeholder_text="YYYY-MM-DD"):
         super().__init__(master)
         self.var = textvariable or tk.StringVar()
-        self.entry = ctk.CTkEntry(self, textvariable=self.var, width=width, placeholder_text=placeholder_text, state="readonly")
+        self.entry = ctk.CTkEntry(self, textvariable=self.var, width=width,
+                                  placeholder_text=placeholder_text, state="readonly")
         self.entry.pack(side="left", fill="x")
         self.entry.bind("<Button-1>", self._open_popup)
 
@@ -25,20 +26,17 @@ class DatePickerEntry(ctk.CTkFrame):
         self.popup = None
 
     def _open_popup(self, event=None):
-        # すでに開いていたら閉じる
         if self.popup and tk.Toplevel.winfo_exists(self.popup):
             self.popup.destroy()
 
-        # 位置計算（エントリのすぐ下に出す）
         x = self.entry.winfo_rootx()
         y = self.entry.winfo_rooty() + self.entry.winfo_height()
 
         self.popup = tk.Toplevel(self)
-        self.popup.wm_overrideredirect(True)   # 枠なし
+        self.popup.wm_overrideredirect(True)
         self.popup.wm_geometry(f"+{x}+{y}")
         self.popup.attributes("-topmost", True)
 
-        # 既存値を初期選択に反映
         selected_date = None
         try:
             if self.var.get():
@@ -49,7 +47,7 @@ class DatePickerEntry(ctk.CTkFrame):
         cal = Calendar(
             self.popup,
             selectmode="day",
-            date_pattern="yyyy-mm-dd",  # ← 受け取り形式
+            date_pattern="yyyy-mm-dd",
             year=(selected_date.year if selected_date else date.today().year),
             month=(selected_date.month if selected_date else date.today().month),
             day=(selected_date.day if selected_date else date.today().day),
@@ -58,18 +56,17 @@ class DatePickerEntry(ctk.CTkFrame):
         cal.pack(padx=4, pady=4)
 
         def on_ok():
-            self.var.set(cal.get_date())  # "YYYY-MM-DD"
+            self.var.set(cal.get_date())
             self.popup.destroy()
 
         def on_cancel():
             self.popup.destroy()
 
         btns = ctk.CTkFrame(self.popup)
-        btns.pack(fill="x", padx=4, pady=(0,4))
+        btns.pack(fill="x", padx=4, pady=(0, 4))
         ctk.CTkButton(btns, text="OK", command=on_ok, width=60).pack(side="left", padx=4)
         ctk.CTkButton(btns, text="キャンセル", command=on_cancel, width=80).pack(side="right", padx=4)
 
-        # フォーカス外れたら閉じる
         self.popup.focus_force()
         self.popup.bind("<FocusOut>", lambda e: self.popup.destroy())
 
@@ -98,17 +95,20 @@ class AttendanceListScreen(ctk.CTkFrame):
         # フィルタ行
         filt = ctk.CTkFrame(self)
         filt.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 8))
-        for i in range(10): filt.grid_columnconfigure(i, weight=0)
+        for i in range(10):
+            filt.grid_columnconfigure(i, weight=0)
         filt.grid_columnconfigure(9, weight=1)
 
         ctk.CTkLabel(filt, text="開始日").grid(row=0, column=0, padx=(8, 4), pady=6, sticky="e")
         DatePickerEntry(filt, textvariable=self.start_var, width=130).grid(row=0, column=1, padx=(0, 12), pady=6, sticky="w")
 
         ctk.CTkLabel(filt, text="終了日").grid(row=0, column=2, padx=(8, 4), pady=6, sticky="e")
-        DatePickerEntry(filt, textvariable=self.end_var,   width=130).grid(row=0, column=3, padx=(0, 12), pady=6, sticky="w")
+        DatePickerEntry(filt, textvariable=self.end_var, width=130).grid(row=0, column=3, padx=(0, 12), pady=6, sticky="w")
 
         ctk.CTkLabel(filt, text="従業員").grid(row=0, column=4, padx=(8, 4), pady=6, sticky="e")
-        ctk.CTkOptionMenu(filt, values=self._employee_options(), variable=self.emp_var, width=220).grid(row=0, column=5, padx=(0, 12), pady=6, sticky="w")
+        ctk.CTkOptionMenu(filt, values=self._employee_options(), variable=self.emp_var, width=220).grid(
+            row=0, column=5, padx=(0, 12), pady=6, sticky="w"
+        )
 
         ctk.CTkButton(filt, text="検索", command=self.search).grid(row=0, column=6, padx=4, pady=6)
         ctk.CTkButton(filt, text="今日", command=self.quick_today).grid(row=0, column=7, padx=4, pady=6)
@@ -119,15 +119,35 @@ class AttendanceListScreen(ctk.CTkFrame):
         meta = ctk.CTkFrame(self)
         meta.grid(row=3, column=0, sticky="ew", padx=16, pady=(4, 12))
         meta.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(meta, textvariable=self.count_var).pack(side="left", padx=6)
+        ctk.CTkLabel(meta, textvariable=self.count_var, font=("Meiryo UI", 14)).pack(side="left", padx=6)
         ctk.CTkButton(meta, text="CSVエクスポート", command=self.export_csv).pack(side="right", padx=4)
 
-        # テーブル
+        # テーブル枠
         table_wrap = ctk.CTkFrame(self)
         table_wrap.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 0))
         table_wrap.grid_rowconfigure(0, weight=1)
         table_wrap.grid_columnconfigure(0, weight=1)
 
+        # ===== Treeview を大きく見やすくするスタイル =====
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure(
+            "Treeview",
+            font=("Meiryo UI", 14),   # 行の文字
+            rowheight=36,             # 行の高さ
+        )
+        style.configure(
+            "Treeview.Heading",
+            font=("Meiryo UI", 15, "bold"),  # 見出しの文字
+            padding=6,
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", "#DBEAFE")],
+            foreground=[("selected", "#111827")],
+        )
+
+        # テーブル
         self.tree = ttk.Treeview(
             table_wrap,
             columns=("id", "ts", "code", "name", "type"),
@@ -139,11 +159,14 @@ class AttendanceListScreen(ctk.CTkFrame):
         self.tree.heading("code", text="コード")
         self.tree.heading("name", text="氏名")
         self.tree.heading("type", text="区分")
-        self.tree.column("id", width=80, anchor="e")
-        self.tree.column("ts", width=170, anchor="w")
-        self.tree.column("code", width=120, anchor="w")
-        self.tree.column("name", width=160, anchor="w")
-        self.tree.column("type", width=100, anchor="w")
+
+        # 広めのカラム幅
+        self.tree.column("id",   width=110, anchor="e")
+        self.tree.column("ts",   width=220, anchor="w")
+        self.tree.column("code", width=160, anchor="w")
+        self.tree.column("name", width=200, anchor="w")
+        self.tree.column("type", width=130, anchor="w")
+
         self.tree.grid(row=0, column=0, sticky="nsew")
 
         yscroll = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
@@ -166,9 +189,9 @@ class AttendanceListScreen(ctk.CTkFrame):
         return v.split(" ")[0] if " " in v else v
 
     def _parse_date(self, s: str | None) -> str | None:
-        if not s: return None
+        if not s:
+            return None
         try:
-            # 受け取ったまま 'YYYY-MM-DD' で返す
             datetime.strptime(s, "%Y-%m-%d")
             return s
         except ValueError:
@@ -192,9 +215,15 @@ class AttendanceListScreen(ctk.CTkFrame):
         for i in self.tree.get_children():
             self.tree.delete(i)
         for r in rows:
+            try:
+                # 秒以下をカットして「分まで」に整形
+                ts_str = datetime.strptime(r["ts"], "%Y-%m-%dT%H:%M:%S.%f").strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                ts_str = r["ts"].replace("T", " ")
+
             self.tree.insert("", "end", values=(
                 r["id"],
-                r["ts"].replace("T", " "),
+                ts_str,
                 r["employee_code"],
                 r.get("name", ""),
                 self._label_of_type(r["punch_type"]),
@@ -233,7 +262,6 @@ class AttendanceListScreen(ctk.CTkFrame):
         if not path:
             return
 
-        # テーブル上の表示内容をそのまま出力
         headers = ["ID", "日時", "コード", "氏名", "区分"]
         try:
             with open(path, "w", encoding="utf-8-sig", newline="") as f:
