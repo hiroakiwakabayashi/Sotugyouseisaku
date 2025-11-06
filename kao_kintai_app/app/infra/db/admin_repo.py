@@ -30,16 +30,30 @@ class AdminRepo:
 
     # 初期管理者シード（admin01 / admin01）
     def seed_default(self):
-        if self.exists_any():
-            return
-        self.create(username="admin01", display_name="管理者", password_plain="admin01", role="admin", is_active=True)
+        """初回起動時に admin01/su を投入。既存admin01がadminなら su に格上げ。"""
+        with self._conn() as con:
+            # 既に admin01 があるか確認
+            cur = con.execute("SELECT username, role FROM admins WHERE username = ?;", ("admin01",))
+            row = cur.fetchone()
+            if row is None:
+                # 存在しない → su で作成
+                self.create(username="admin01", display_name="管理者", password_plain="admin01", role="su", is_active=True)
+                return
+            # 既にある → 役割が su でなければ su に更新
+            if row[1] != "su":
+                con.execute("UPDATE admins SET role = 'su' WHERE username = ?;", ("admin01",))
+                con.commit()
 
     def exists_any(self) -> bool:
         with self._conn() as con:
             cur = con.execute("SELECT 1 FROM admins LIMIT 1;")
             return cur.fetchone() is not None
 
+    # app/infra/db/admin_repo.py の create() を置き換え
     def create(self, *, username: str, display_name: str, password_plain: str, role: str = "admin", is_active: bool = True) -> int:
+        role = (role or "admin").lower()
+        if role not in ("admin", "su"):
+            role = "admin"
         pw_hash = bcrypt.hashpw(password_plain.encode("utf-8"), bcrypt.gensalt())
         with self._conn() as con:
             cur = con.execute("""
@@ -48,6 +62,7 @@ class AdminRepo:
             """, (username, display_name, pw_hash, role, 1 if is_active else 0))
             con.commit()
             return cur.lastrowid
+
 
     def find_by_username(self, username: str) -> Optional[Dict]:
         with self._conn() as con:
@@ -86,3 +101,4 @@ class AdminRepo:
             """)
             cols = [c[0] for c in cur.description]
             return [dict(zip(cols, r)) for r in cur.fetchall()]
+    

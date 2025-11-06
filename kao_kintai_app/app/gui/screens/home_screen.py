@@ -18,7 +18,7 @@ class HomeScreen(ctk.CTkFrame):
             self.grid_columnconfigure(i, weight=1)
 
         # 見出し
-        title = ctk.CTkLabel(self, text="Kao-Kintai 起動テスト", font=("Meiryo UI", 24, "bold"))
+        title = ctk.CTkLabel(self, text="Kao-Kintai", font=("Meiryo UI", 24, "bold"))
         title.grid(row=0, column=0, columnspan=3, pady=(24,8))
 
         subtitle = ctk.CTkLabel(self, text="よく使う機能へすぐ移動できます。", font=("Meiryo UI", 13))
