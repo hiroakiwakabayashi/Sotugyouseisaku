@@ -1,4 +1,4 @@
-# app_shell.py
+# app/gui/app_shell.py
 import customtkinter as ctk
 import os
 
@@ -7,12 +7,15 @@ from .screens.face_clock_screen import FaceClockScreen
 from .screens.attendance_list_screen import AttendanceListScreen
 from .screens.my_attendance_screen import MyAttendanceScreen
 from .screens.admin_login_screen import AdminLoginScreen
-
+from .screens.shift_view_screen import ShiftViewScreen
 
 class AppShell(ctk.CTkFrame):
     def __init__(self, master, cfg: dict):
         super().__init__(master)
         self.cfg = cfg
+
+        # ログイン中の管理者情報（dict: id, username, role, ...）
+        self.current_admin = None
 
         # 履歴管理
         self.history: list[str] = []
@@ -28,13 +31,17 @@ class AppShell(ctk.CTkFrame):
         self.nav.grid(row=0, column=0, sticky="nsw")
         self.nav.grid_propagate(False)
 
-        ctk.CTkLabel(self.nav, text=cfg.get("app_name", "Kao-Kintai"),
-                    font=("Meiryo UI", 18, "bold")).pack(padx=16, pady=(16, 8), anchor="w")
+        ctk.CTkLabel(
+            self.nav,
+            text=cfg.get("app_name", "Kao-Kintai"),
+            font=("Meiryo UI", 18, "bold")
+        ).pack(padx=16, pady=(16, 8), anchor="w")
 
         for text, key in [
             ("🏠 ホーム", "home"),
             ("📷 顔認証 打刻", "face"),
             ("📑 勤怠一覧", "list"),
+            ("🗓 シフト", "shift"),  
             ("👤 マイ勤怠", "my"),
             ("🛠 管理者", "admin"),
         ]:
@@ -61,11 +68,11 @@ class AppShell(ctk.CTkFrame):
         ctk.CTkButton(self.header, text="＞", width=42, command=lambda: self._hist(+1))\
             .pack(side="left", padx=(0, 12), pady=6)
 
-        # 検索バー
+        # 検索バー（プレースホルダ）
         self.search_entry = ctk.CTkEntry(self.header, placeholder_text="検索", width=320)
         self.search_entry.pack(side="left", pady=6)
 
-        # プロフィール
+        # プロフィール（プレースホルダ）
         ctk.CTkButton(self.header, text="👤", width=36)\
             .pack(side="right", padx=8, pady=6)
 
@@ -75,45 +82,76 @@ class AppShell(ctk.CTkFrame):
         self.body.grid_rowconfigure(0, weight=1)
         self.body.grid_columnconfigure(0, weight=1)
 
-        # 各画面キャッシュ
+        # 各画面キャッシュ（必要なら使う）
         self._screens = {}
+
+        # 既定画面
         self.show("home")
 
-    # ===== 管理者メニュー構築 =====
+    # ===== 左サブナビのクリア =====
     def _clear_subnav(self):
         for w in self.subnav.winfo_children():
             w.destroy()
 
+    # ===== 管理者メニュー（ロール別） =====
     def _build_admin_subnav(self):
         self._clear_subnav()
         ctk.CTkLabel(self.subnav, text="🛠 管理者メニュー", font=("Meiryo UI", 14, "bold"))\
             .pack(padx=8, pady=(6, 4), anchor="w")
 
-        # 呼び出しをクラス基準に修正
-        from .screens.employee_register_screen import EmployeeRegisterScreen
-        from .screens.face_data_screen import FaceDataScreen
+        role = (self.current_admin or {}).get("role", "admin")
+
+        # どちらでも：勤怠一覧
         from .screens.attendance_list_screen import AttendanceListScreen
+        ctk.CTkButton(
+            self.subnav, text="📑 勤怠一覧 / 検索",
+            command=lambda: self._swap_right(AttendanceListScreen)
+        ).pack(padx=8, pady=4, fill="x")
+
+        if role != "su":
+            # 一般 admin：顔データ管理のみ
+            from .screens.face_data_screen import FaceDataScreen
+            ctk.CTkButton(
+                self.subnav, text="🖼 顔データ管理",
+                command=lambda: self._swap_right(FaceDataScreen)
+            ).pack(padx=8, pady=4, fill="x")
+            return
+
+        # su：フルアクセス
+        from .screens.employee_register_screen import EmployeeRegisterScreen
         from .screens.camera_settings_screen import CameraSettingsScreen
         from .screens.admin_account_register_screen import AdminAccountRegisterScreen
-        
-        btns = [
-            ("👥 従業員登録 / 編集", lambda: self._swap_right(EmployeeRegisterScreen)),
-            ("🖼 顔データ管理",       lambda: self._swap_right(FaceDataScreen)),
-            ("📑 勤怠一覧 / 検索",    lambda: self._swap_right(AttendanceListScreen)),
-            ("🎥 カメラ・顔認証設定",  lambda: self._swap_right(CameraSettingsScreen)),
-            ("🔐 管理者アカウント",   lambda: self._swap_right(AdminAccountRegisterScreen)),
-        ]
+        from .screens.face_data_screen import FaceDataScreen
+        from .screens.shift_editor_screen import ShiftEditorScreen
 
-        for label, cmd in btns:
-            ctk.CTkButton(self.subnav, text=label, command=cmd).pack(padx=8, pady=4, fill="x")
+        ctk.CTkButton(
+            self.subnav, text="👥 従業員登録 / 編集",
+            command=lambda: self._swap_right(EmployeeRegisterScreen)
+        ).pack(padx=8, pady=4, fill="x")
+        ctk.CTkButton(
+            self.subnav, text="🎥 カメラ・顔認証設定",
+            command=lambda: self._swap_right(CameraSettingsScreen)
+        ).pack(padx=8, pady=4, fill="x")
+        # current_admin を渡すためファクトリで呼ぶ
+        ctk.CTkButton(
+            self.subnav, text="🔐 管理者アカウント",
+            command=lambda: self._swap_right(lambda parent: AdminAccountRegisterScreen(parent, self.current_admin))
+        ).pack(padx=8, pady=4, fill="x")
+        ctk.CTkButton(
+            self.subnav, text="🖼 顔データ管理",
+            command=lambda: self._swap_right(FaceDataScreen)
+        ).pack(padx=8, pady=4, fill="x")
+        ctk.CTkButton(
+            self.subnav, text="🗓 シフト作成 / 編集",
+            command=lambda: self._swap_right(ShiftEditorScreen)
+        ).pack(padx=8, pady=4, fill="x")
 
-    # ===== ペイン切り替え =====
-    def _swap_right(self, widget_class):
-        # まず既存の子を全削除
+    # ===== 右ペイン差し替え（クラス/ファクトリ両対応） =====
+    def _swap_right(self, widget_class_or_factory):
         for child in self.body.winfo_children():
             child.destroy()
-        # 新しいウィジェットを生成して配置
-        widget = widget_class(self.body)
+        # クラス（parentのみの__init__）か、parentを受け取るファクトリを許容
+        widget = widget_class_or_factory(self.body)
         widget.grid(row=0, column=0, sticky="nsew")
         return widget
 
@@ -146,11 +184,17 @@ class AppShell(ctk.CTkFrame):
             self.hist_idx = len(self.history) - 1
 
         if key == "admin":
-            def to_menu():
-                # ログイン成功後：左下サブナビ展開＋従業員登録画面表示
+            def to_menu(user):
+                # ログイン成功後：ユーザー保持 & ロール別メニュー
+                self.current_admin = user
                 self._build_admin_subnav()
-                from .screens.employee_register_screen import EmployeeRegisterScreen
-                self._swap_right(EmployeeRegisterScreen)
+                # 既定表示：su→従業員 / admin→顔データ
+                if user.get("role") == "su":
+                    from .screens.employee_register_screen import EmployeeRegisterScreen
+                    self._swap_right(EmployeeRegisterScreen)
+                else:
+                    from .screens.face_data_screen import FaceDataScreen
+                    self._swap_right(FaceDataScreen)
             screen = AdminLoginScreen(self.body, switch_to_menu_callback=to_menu)
         elif key == "home":
             screen = HomeScreen(self.body)
@@ -160,15 +204,17 @@ class AppShell(ctk.CTkFrame):
             screen = AttendanceListScreen(self.body)
         elif key == "my":
             screen = MyAttendanceScreen(self.body)
+        elif key == "shift":
+            screen = ShiftViewScreen(self.body)
+
         else:
             screen = HomeScreen(self.body)
 
         screen.grid(row=0, column=0, sticky="nsew")
 
 
-
 def run_app(cfg: dict):
-    # テーマとスケール（DPI二重拡大を避けるため1.0固定）
+    # テーマとスケール
     ctk.set_appearance_mode("light")
     ctk.set_default_color_theme("blue")
     ctk.set_widget_scaling(1.0)
@@ -177,21 +223,20 @@ def run_app(cfg: dict):
     root = ctk.CTk()
     root.title(cfg.get("app_name", "Kao-Kintai"))
 
-    # ルートのグリッド（ヘッダー/本体を入れる親に合わせる）
     root.grid_rowconfigure(0, weight=1)
     root.grid_columnconfigure(0, weight=1)
 
     shell = AppShell(master=root, cfg=cfg)
     shell.grid(row=0, column=0, sticky="nsew")
 
-    # OS標準の最大化でフル表示（タスクバー/影/移動 全部OK）
+    # フル表示
     if os.name == "nt":
         root.state("zoomed")
     else:
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
         root.geometry(f"{sw}x{sh}+0+0")
 
-    # 戻る/進むショートカット（任意）
+    # 戻る/進むショートカット
     root.bind("<Control-Left>",  lambda e: shell._hist(-1))
     root.bind("<Control-Right>", lambda e: shell._hist(+1))
 

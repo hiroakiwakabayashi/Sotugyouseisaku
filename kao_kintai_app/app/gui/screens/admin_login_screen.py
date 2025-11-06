@@ -94,7 +94,7 @@ class AdminLoginScreen(ctk.CTkFrame):
             return
 
         # 成功：必要なら self.master.current_admin = user など
-        self.switch_to_menu_callback()
+        self.switch_to_menu_callback(user)
 
     # ===== 戻る処理 =====
     def go_back(self):
