@@ -7,6 +7,112 @@ import csv
 from app.infra.db.employee_repo import EmployeeRepo
 from app.infra.db.attendance_repo import AttendanceRepo
 
+
+# ===============================================================
+# カレンダー付きエントリー（確定/キャンセル付き・同サイズボタン）
+# ===============================================================
+class DatePickerEntry(ctk.CTkFrame):
+    """
+    クリックでポップアップのカレンダーを表示。
+    「確定」を押したときだけ textvariable に反映。
+    フォーカスが外れたら自動で閉じる（＝反映しない）。
+    """
+    def __init__(self, master, textvariable=None, width=130, placeholder_text="YYYY-MM-DD"):
+        super().__init__(master)
+        import tkinter as tk  # 局所 import（Tk と競合しないように）
+
+        self.var = textvariable or tk.StringVar()
+        self.entry = ctk.CTkEntry(
+            self, width=width, textvariable=self.var,
+            placeholder_text=placeholder_text, state="readonly"
+        )
+        self.entry.pack(side="left", fill="x")
+        self.entry.bind("<Button-1>", self._open_popup)
+
+        self.btn = ctk.CTkButton(self, text="📅", width=34, command=self._open_popup)
+        self.btn.pack(side="left", padx=4)
+
+        self._popup = None
+        self._cal = None
+
+    def _open_popup(self, *_):
+        import tkinter as tk
+        from tkcalendar import Calendar
+
+        # 既存ポップアップがあれば閉じる
+        if self._popup and tk.Toplevel.winfo_exists(self._popup):
+            self._popup.destroy()
+
+        # エントリー直下に表示
+        x = self.entry.winfo_rootx()
+        y = self.entry.winfo_rooty() + self.entry.winfo_height()
+
+        self._popup = tk.Toplevel(self)
+        self._popup.overrideredirect(True)
+        self._popup.geometry(f"+{x}+{y}")
+        self._popup.attributes("-topmost", True)
+
+        # 既存値を初期選択に
+        selected = None
+        try:
+            if self.var.get():
+                selected = datetime.strptime(self.var.get(), "%Y-%m-%d").date()
+        except Exception:
+            selected = None
+
+        # カレンダー本体（“ひと月だけ”の見やすい設定）
+        self._cal = Calendar(
+            self._popup,
+            selectmode="day",
+            date_pattern="yyyy-mm-dd",
+            year=(selected.year if selected else date.today().year),
+            month=(selected.month if selected else date.today().month),
+            day=(selected.day if selected else date.today().day),
+            locale="ja_JP",
+            font=("Meiryo UI", 15),
+            showweeknumbers=False,
+            showothermonthdays=False,
+            background="#FFFFFF",
+            foreground="#111111",
+            headersbackground="#E5E7EB",
+            headersforeground="#111111",
+            weekendbackground="#F8FAFC",
+            weekendforeground="#111111",
+            selectbackground="#2563EB",
+            selectforeground="#FFFFFF",
+            bordercolor="#CBD5E1",
+            normalbackground="#FFFFFF",
+            normalforeground="#111111",
+        )
+        self._cal.pack(padx=8, pady=(8, 4))
+
+        # 同サイズボタン
+        BTN_W, BTN_H = 110, 36
+        btns = ctk.CTkFrame(self._popup)
+        btns.pack(fill="x", padx=8, pady=(0, 8))
+
+        ctk.CTkButton(btns, text="確定", width=BTN_W, height=BTN_H, command=self._ok)\
+            .pack(side="left", padx=(30, 8), pady=4)
+        ctk.CTkButton(btns, text="キャンセル", width=BTN_W, height=BTN_H, command=self._cancel)\
+            .pack(side="right", padx=(8, 30), pady=4)
+
+        # フォーカスを失ったら閉じる（＝確定しない）
+        self._popup.focus_force()
+        self._popup.bind("<FocusOut>", lambda e: self._cancel())
+
+    def _ok(self):
+        if self._cal:
+            self.var.set(self._cal.get_date())
+        self._cancel()
+
+    def _cancel(self):
+        import tkinter as tk
+        if self._popup and tk.Toplevel.winfo_exists(self._popup):
+            self._popup.destroy()
+        self._popup = None
+        self._cal = None
+
+
 # 既定の打刻種別（プロジェクトで使っているもの）
 TYPES_ORDER = ["CLOCK_IN", "BREAK_START", "BREAK_END", "CLOCK_OUT"]
 
@@ -18,11 +124,12 @@ def _yyyymm_first_last():
     first = d.replace(day=1)
     # 次月の1日-1日 = 当月末日
     if d.month == 12:
-        next_first = d.replace(year=d.year+1, month=1, day=1)
+        next_first = d.replace(year=d.year + 1, month=1, day=1)
     else:
-        next_first = d.replace(month=d.month+1, day=1)
+        next_first = d.replace(month=d.month + 1, day=1)
     last = next_first.fromordinal(next_first.toordinal() - 1)
     return first.strftime("%Y-%m-%d"), last.strftime("%Y-%m-%d")
+
 
 class MyAttendanceScreen(ctk.CTkFrame):
     """
@@ -54,25 +161,30 @@ class MyAttendanceScreen(ctk.CTkFrame):
         cond.grid_columnconfigure(9, weight=1)
 
         # 従業員選択
-        ctk.CTkLabel(cond, text="従業員:").grid(row=0, column=0, padx=(8,4), pady=8, sticky="w")
+        ctk.CTkLabel(cond, text="従業員:").grid(row=0, column=0, padx=(8, 4), pady=8, sticky="w")
         self.emp_values = self._build_emp_values()
-        self.emp_var = ctk.StringVar(value=self.emp_values[0] if self.emp_values else "(従業員未登録)")
-        self.emp_sel = ctk.CTkOptionMenu(cond, values=self.emp_values or ["(従業員未登録)"], variable=self.emp_var, width=220)
+        import tkinter as tk  # for StringVar
+        self.emp_var = tk.StringVar(value=self.emp_values[0] if self.emp_values else "(従業員未登録)")
+        self.emp_sel = ctk.CTkOptionMenu(cond, values=self.emp_values or ["(従業員未登録)"],
+                                         variable=self.emp_var, width=220)
         self.emp_sel.grid(row=0, column=1, padx=4, pady=8, sticky="w")
 
-        # 期間
-        ctk.CTkLabel(cond, text="期間:").grid(row=0, column=2, padx=(16,4), pady=8, sticky="w")
+        # 期間（← ここをカレンダー付きエントリーに変更）
+        ctk.CTkLabel(cond, text="期間:").grid(row=0, column=2, padx=(16, 4), pady=8, sticky="w")
         s0, e0 = _yyyymm_first_last()
-        self.start_var = ctk.StringVar(value=s0)
-        self.end_var   = ctk.StringVar(value=e0)
-        self.start_e = ctk.CTkEntry(cond, width=120, textvariable=self.start_var, placeholder_text="YYYY-MM-DD")
-        self.end_e   = ctk.CTkEntry(cond, width=120, textvariable=self.end_var,   placeholder_text="YYYY-MM-DD")
-        self.start_e.grid(row=0, column=3, padx=4, pady=8, sticky="w")
-        self.end_e.grid(row=0, column=4, padx=4, pady=8, sticky="w")
+        self.start_var = tk.StringVar(value=s0)
+        self.end_var   = tk.StringVar(value=e0)
+
+        DatePickerEntry(cond, textvariable=self.start_var, width=130).grid(
+            row=0, column=3, padx=4, pady=8, sticky="w"
+        )
+        DatePickerEntry(cond, textvariable=self.end_var, width=130).grid(
+            row=0, column=4, padx=4, pady=8, sticky="w"
+        )
 
         ctk.CTkButton(cond, text="今日",  width=64, command=self._quick_today).grid(row=0, column=5, padx=4)
         ctk.CTkButton(cond, text="今月",  width=64, command=self._quick_month).grid(row=0, column=6, padx=4)
-        ctk.CTkButton(cond, text="検索",  width=92, command=self._search).grid(row=0, column=7, padx=(12,4))
+        ctk.CTkButton(cond, text="検索",  width=92, command=self._search).grid(row=0, column=7, padx=(12, 4))
         ctk.CTkButton(cond, text="CSV保存", width=92, command=self._export_csv).grid(row=0, column=8, padx=4)
 
         # ===== 一覧＋サマリ =====
@@ -130,15 +242,17 @@ class MyAttendanceScreen(ctk.CTkFrame):
 
     def _clear_rows(self):
         for w in self._row_widgets:
-            try: w.destroy()
-            except: pass
+            try:
+                w.destroy()
+            except:
+                pass
         self._row_widgets.clear()
 
     def _add_row(self, dt_text: str, typ: str, memo: str = ""):
         r = len(self._row_widgets)
-        lbl_dt  = ctk.CTkLabel(self.scroll, text=dt_text, anchor="w")
-        lbl_ty  = ctk.CTkLabel(self.scroll, text=typ, anchor="w")
-        lbl_me  = ctk.CTkLabel(self.scroll, text=memo, anchor="w")
+        lbl_dt = ctk.CTkLabel(self.scroll, text=dt_text, anchor="w")
+        lbl_ty = ctk.CTkLabel(self.scroll, text=typ, anchor="w")
+        lbl_me = ctk.CTkLabel(self.scroll, text=memo, anchor="w")
         lbl_dt.grid(row=r, column=0, padx=8, pady=3, sticky="w")
         lbl_ty.grid(row=r, column=1, padx=8, pady=3, sticky="w")
         lbl_me.grid(row=r, column=2, padx=8, pady=3, sticky="w")
@@ -187,7 +301,9 @@ class MyAttendanceScreen(ctk.CTkFrame):
         # サマリ表示
         total = len(rows)
         parts = [f"{k}:{cnt[k]}件" for k in TYPES_ORDER if k in cnt]
-        self.summary.configure(text=f"表示件数: {total}  |  " + "  /  ".join(parts) if rows else "該当データはありません。")
+        self.summary.configure(
+            text=f"表示件数: {total}  |  " + "  /  ".join(parts) if rows else "該当データはありません。"
+        )
 
     # ===== CSV保存 =====
     def _export_csv(self):
@@ -219,9 +335,7 @@ class MyAttendanceScreen(ctk.CTkFrame):
             return
 
         # 書き出し（既知列＋不明列も落とさない方針）
-        # 既知列優先の並び
         known = ["id", "employee_code", "type", "ts", "note"]
-        # 追加の未知列
         extra = []
         for r in rows:
             for k in r.keys():
