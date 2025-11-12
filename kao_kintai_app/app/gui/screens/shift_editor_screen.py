@@ -1,46 +1,31 @@
-# app/gui/screens/shift_view_screen.py
+# app/gui/screens/shift_editor_screen.py
 import customtkinter as ctk
-from tkinter import filedialog, messagebox
-from datetime import date, datetime, timedelta
-import csv
+from tkinter import messagebox
+from datetime import date, timedelta
+from typing import Optional
 
 from app.infra.db.shift_repo import ShiftRepo
 from app.infra.db.employee_repo import EmployeeRepo
 
+__all__ = ["ShiftEditorScreen"]
 
-def _today_str():
+
+def _today_str() -> str:
     return date.today().strftime("%Y-%m-%d")
 
-def _week_range():
+
+def _week_range_str():
     d = date.today()
     start = d - timedelta(days=d.weekday())  # 月曜はじめ
     end = start + timedelta(days=6)
     return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
-def _month_range():
-    d = date.today().replace(day=1)
-    if d.month == 12:
-        next_first = d.replace(year=d.year+1, month=1, day=1)
-    else:
-        next_first = d.replace(month=d.month+1, day=1)
-    last = next_first - timedelta(days=1)
-    return d.strftime("%Y-%m-%d"), last.strftime("%Y-%m-%d")
 
-def _hhmm_to_minutes(hhmm: str) -> int:
-    try:
-        h, m = map(int, hhmm.split(":"))
-        return h*60 + m
-    except Exception:
-        return 0
-
-
-class ShiftViewScreen(ctk.CTkFrame):
-    """シフト閲覧（読み取り専用）
-       - 従業員選択（空=全員）
-       - 期間絞り込み（今日 / 今週 / 今月 / 任意）
-       - 一覧表示（日付・開始・終了・合計時間・メモ）
-       - 件数/合計時間サマリ
-       - CSV出力
+class ShiftEditorScreen(ctk.CTkFrame):
+    """シフト作成 / 編集（su向け）
+       - 期間検索（今日 / 今週 / 任意）
+       - 従業員絞り込み（空=全員）
+       - 行追加、選択行の保存（追加/更新）、削除
     """
     def __init__(self, master):
         super().__init__(master)
@@ -51,207 +36,210 @@ class ShiftViewScreen(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
 
         # タイトル
-        ctk.CTkLabel(self, text="🗓 シフト閲覧", font=("Meiryo UI", 18, "bold"))\
+        ctk.CTkLabel(self, text="🗓 シフト作成・編集", font=("Meiryo UI", 18, "bold"))\
             .grid(row=0, column=0, sticky="w", padx=12, pady=(12, 6))
 
-        # ===== 条件行 =====
+        # ===== 条件エリア =====
         cond = ctk.CTkFrame(self)
-        cond.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 6))
+        cond.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 8))
         for i in range(12):
             cond.grid_columnconfigure(i, weight=0)
         cond.grid_columnconfigure(11, weight=1)
 
-        # 従業員選択
+        # 従業員プルダウン（空=全員）
         ctk.CTkLabel(cond, text="従業員:").grid(row=0, column=0, padx=(8,4), pady=8, sticky="w")
         self.emp_values = ["(全員)"] + [f'{r["code"]}:{r["name"]}' for r in self.emp_repo.list_all()]
         self.emp_var = ctk.StringVar(value=self.emp_values[0])
-        self.emp_sel = ctk.CTkOptionMenu(cond, values=self.emp_values, variable=self.emp_var, width=200)
-        self.emp_sel.grid(row=0, column=1, padx=4, pady=8, sticky="w")
+        ctk.CTkOptionMenu(cond, values=self.emp_values, variable=self.emp_var, width=220)\
+            .grid(row=0, column=1, padx=4, pady=8, sticky="w")
 
         # 期間
         ctk.CTkLabel(cond, text="期間:").grid(row=0, column=2, padx=(16,4), pady=8, sticky="w")
-        s0, e0 = _week_range()
+        s0, e0 = _week_range_str()
         self.start_var = ctk.StringVar(value=s0)
         self.end_var   = ctk.StringVar(value=e0)
-        self.start_e = ctk.CTkEntry(cond, width=120, textvariable=self.start_var, placeholder_text="YYYY-MM-DD")
-        self.end_e   = ctk.CTkEntry(cond, width=120, textvariable=self.end_var,   placeholder_text="YYYY-MM-DD")
-        self.start_e.grid(row=0, column=3, padx=4, pady=8, sticky="w")
-        self.end_e.grid(row=0, column=4, padx=4, pady=8, sticky="w")
+        ctk.CTkEntry(cond, width=120, textvariable=self.start_var, placeholder_text="YYYY-MM-DD")\
+            .grid(row=0, column=3, padx=4, pady=8, sticky="w")
+        ctk.CTkEntry(cond, width=120, textvariable=self.end_var,   placeholder_text="YYYY-MM-DD")\
+            .grid(row=0, column=4, padx=4, pady=8, sticky="w")
 
-        ctk.CTkButton(cond, text="今日",  width=64, command=self._quick_today).grid(row=0, column=5, padx=4)
-        ctk.CTkButton(cond, text="今週",  width=64, command=self._quick_week).grid(row=0, column=6, padx=4)
-        ctk.CTkButton(cond, text="今月",  width=64, command=self._quick_month).grid(row=0, column=7, padx=4)
-        ctk.CTkButton(cond, text="検索",  width=90, command=self._search).grid(row=0, column=8, padx=(12,4))
-        ctk.CTkButton(cond, text="CSV出力", width=90, command=self._export_csv).grid(row=0, column=9, padx=4)
+        ctk.CTkButton(cond, text="今日",  width=70, command=self._quick_today).grid(row=0, column=5, padx=4)
+        ctk.CTkButton(cond, text="今週",  width=70, command=self._quick_week).grid(row=0, column=6, padx=4)
+        ctk.CTkButton(cond, text="検索",  width=90, command=self._search).grid(row=0, column=7, padx=(12,4))
+        ctk.CTkButton(cond, text="追加行", width=90, command=self._new_row).grid(row=0, column=8, padx=4)
 
-        # ===== 一覧（カード枠＋区切り線＋ゼブラ） =====
+        # ===== 一覧（スクロール） =====
         body = ctk.CTkFrame(self)
-        body.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 12))
+        body.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 8))
         body.grid_rowconfigure(1, weight=1)
         body.grid_columnconfigure(0, weight=1)
 
-        # ヘッダ
-        header = ctk.CTkFrame(body, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew")
-        titles = ["従業員コード", "氏名", "日付", "開始", "終了", "合計(h)", "メモ"]
+        head = ctk.CTkFrame(body, fg_color="transparent")
+        head.grid(row=0, column=0, sticky="ew")
+        titles = ["", "ID", "従業員コード", "日付", "開始", "終了", "メモ"]
         for i, t in enumerate(titles):
-            ctk.CTkLabel(header, text=t, anchor="w", font=("Meiryo UI", 13, "bold")) \
-                .grid(row=0, column=i, padx=10, pady=(10, 8), sticky="w")
-            header.grid_columnconfigure(i, weight=1 if i in (0,1,2,6) else 0)
+            ctk.CTkLabel(head, text=t, anchor="w").grid(row=0, column=i, padx=8, pady=6, sticky="w")
+            head.grid_columnconfigure(i, weight=1 if i in (2,3,6) else 0)
 
-        # 区切り線（細フレーム）
-        ctk.CTkFrame(body, height=1, fg_color="#D0D0D0") \
-            .grid(row=0, column=0, sticky="ew", pady=(42, 6))
-
-        self.scroll = ctk.CTkScrollableFrame(body, height=420)
+        self.scroll = ctk.CTkScrollableFrame(body, height=420, fg_color="#ECEFF1")
         self.scroll.grid(row=1, column=0, sticky="nsew")
-        self._row_widgets = []
 
-        self.summary = ctk.CTkLabel(body, text="—", anchor="w")
-        self.summary.grid(row=2, column=0, sticky="ew", padx=8, pady=(8, 4))
+        # 操作ボタン
+        ops = ctk.CTkFrame(self)
+        ops.grid(row=3, column=0, sticky="ew", padx=12, pady=(0, 12))
+        ctk.CTkButton(ops, text="選択行を保存（追加/更新）", command=self._save_selected)\
+            .pack(side="left", padx=6, pady=6)
+        ctk.CTkButton(ops, text="選択行を削除", fg_color="#E74C3C", hover_color="#C0392B", command=self._delete_selected)\
+            .pack(side="left", padx=6, pady=6)
 
-        # 初回検索
+        # 行ウィジェット保持
+        self._rows = []     # [{id, widgets, map}, ...]
+        self._row_count = 0
+
         self._search()
 
-    # ==== helpers ====
-    def _emp_code(self):
-        v = self.emp_var.get()
-        return None if v == "(全員)" else v.split(":", 1)[0].strip()
-
+    # ===== クイック期間 =====
     def _quick_today(self):
         t = _today_str()
         self.start_var.set(t); self.end_var.set(t)
         self._search()
 
     def _quick_week(self):
-        s, e = _week_range()
+        s, e = _week_range_str()
         self.start_var.set(s); self.end_var.set(e)
         self._search()
 
-    def _quick_month(self):
-        s, e = _month_range()
-        self.start_var.set(s); self.end_var.set(e)
-        self._search()
-
+    # ===== 行管理 =====
     def _clear_rows(self):
-        for w in self._row_widgets:
-            try: w.destroy()
-            except: pass
-        self._row_widgets.clear()
+        for r in self._rows:
+            for w in r["widgets"]:
+                try: w.destroy()
+                except: pass
+        self._rows.clear()
+        self._row_count = 0
 
-    def _add_row(self, code, name, work_date, start, end, hours, note):
-        idx = len(self._row_widgets)  # ウィジェット総数ベース
-        row_index = idx // 7          # 1行=7セルなのでおおよその行番号
+    def _add_row(self, *, id: Optional[int], employee_code: str, work_date: str,
+                 start_time: str, end_time: str, note: str):
+        rindex = self._row_count
 
-        # ゼブラ行の背景色
-        bg_even = "#FAFAFA"
-        bg_odd  = "#FFFFFF"
-        row_bg  = bg_even if (row_index % 2 == 0) else bg_odd
-
-        # 行を「カード」っぽく囲う
-        card = ctk.CTkFrame(
-            self.scroll,
-            corner_radius=10,
-            border_width=1,
-            border_color="#D9D9D9",
-            fg_color=row_bg
-        )
-        # 横に余白、縦に少し間隔
-        card.grid(row=row_index, column=0, sticky="ew", padx=8, pady=5)
-        # カード内のカラム伸縮
-        for i in (0,1,2,6):
+        # カード化（見やすさ）
+        card = ctk.CTkFrame(self.scroll, corner_radius=10, border_width=2,
+                            border_color="#B8C1CC", fg_color="#FFFFFF")
+        card.grid(row=rindex, column=0, sticky="ew", padx=10, pady=6)
+        for i in (0,2,3,6):
             card.grid_columnconfigure(i, weight=1)
 
-        # 各セル（適度に余白を増やして見やすく）
-        cells = [
-            ctk.CTkLabel(card, text=code,      anchor="w"),
-            ctk.CTkLabel(card, text=name,      anchor="w"),
-            ctk.CTkLabel(card, text=work_date, anchor="w"),
-            ctk.CTkLabel(card, text=start,     anchor="w"),
-            ctk.CTkLabel(card, text=end,       anchor="w"),
-            ctk.CTkLabel(card, text=f"{hours:.2f}", anchor="e"),
-            ctk.CTkLabel(card, text=note,      anchor="w"),
-        ]
-        for i, c in enumerate(cells):
-            # 右寄せの合計(h)だけ e、それ以外は w/ew
-            sticky = "e" if i == 5 else ("ew" if i in (0,1,2,6) else "w")
-            c.grid(row=0, column=i, padx=10, pady=8, sticky=sticky)
-            self._row_widgets.append(c)
+        # チェック
+        sel = ctk.CTkCheckBox(card, text="")
+        sel.grid(row=0, column=0, padx=8, pady=8, sticky="w")
 
-        # カード自体も破棄対象へ（クリア時にまとめて消す）
-        self._row_widgets.append(card)
+        # ID（表示のみ）
+        id_lbl = ctk.CTkLabel(card, text=str(id) if id else "-")
+        id_lbl.grid(row=0, column=1, padx=8, pady=8, sticky="w")
 
-    # ==== actions ====
+        code_e = ctk.CTkEntry(card, width=140)
+        code_e.insert(0, employee_code)
+        code_e.grid(row=0, column=2, padx=8, pady=8, sticky="ew")
+
+        date_e = ctk.CTkEntry(card, width=120, placeholder_text="YYYY-MM-DD")
+        date_e.insert(0, work_date)
+        date_e.grid(row=0, column=3, padx=8, pady=8, sticky="ew")
+
+        st_e = ctk.CTkEntry(card, width=80, placeholder_text="HH:MM")
+        st_e.insert(0, start_time)
+        st_e.grid(row=0, column=4, padx=8, pady=8, sticky="w")
+
+        en_e = ctk.CTkEntry(card, width=80, placeholder_text="HH:MM")
+        en_e.insert(0, end_time)
+        en_e.grid(row=0, column=5, padx=8, pady=8, sticky="w")
+
+        note_e = ctk.CTkEntry(card, width=260)
+        note_e.insert(0, note)
+        note_e.grid(row=0, column=6, padx=8, pady=8, sticky="ew")
+
+        self._rows.append({
+            "id": id,
+            "widgets": [card, sel, id_lbl, code_e, date_e, st_e, en_e, note_e],
+            "map": {"sel": sel, "code": code_e, "date": date_e, "st": st_e, "en": en_e, "note": note_e}
+        })
+        self._row_count += 1
+
+    # ===== 入出力 =====
+    def _selected_maps(self):
+        out = []
+        for r in self._rows:
+            if r["map"]["sel"].get():
+                out.append({
+                    "id": r["id"],
+                    "employee_code": r["map"]["code"].get().strip(),
+                    "work_date":     r["map"]["date"].get().strip(),
+                    "start_time":    r["map"]["st"].get().strip(),
+                    "end_time":      r["map"]["en"].get().strip(),
+                    "note":          r["map"]["note"].get().strip(),
+                })
+        return out
+
+    def _validate(self, m: dict) -> tuple[bool, str]:
+        if not m["employee_code"]:
+            return False, "従業員コードが未入力です。"
+        d = m["work_date"]
+        if len(d) != 10 or d[4] != "-" or d[7] != "-":
+            return False, "日付は YYYY-MM-DD 形式で入力してください。"
+        for k in ("start_time", "end_time"):
+            t = m[k]
+            if len(t) != 5 or t[2] != ":":
+                return False, f"{('開始','終了')[k=='end_time']}は HH:MM 形式で入力してください。"
+        if m["start_time"] >= m["end_time"]:
+            return False, "開始≧終了 になっています。"
+        return True, ""
+
+    # ===== 動作 =====
+    def _new_row(self):
+        # 絞り込みの従業員・日付を初期値に
+        v = self.emp_var.get()
+        code = None if v == "(全員)" else v.split(":", 1)[0].strip()
+        code = code or ""
+        day = self.start_var.get() if self.start_var.get() == self.end_var.get() else _today_str()
+        self._add_row(id=None, employee_code=code, work_date=day,
+                      start_time="09:00", end_time="18:00", note="")
+
     def _search(self):
         self._clear_rows()
-
         s, e = self.start_var.get().strip(), self.end_var.get().strip()
-        try:
-            ds = datetime.strptime(s, "%Y-%m-%d")
-            de = datetime.strptime(e, "%Y-%m-%d")
-        except ValueError:
-            messagebox.showwarning("日付エラー", "日付は YYYY-MM-DD 形式で入力してください。")
-            return
-        if ds > de:
-            messagebox.showwarning("日付エラー", "開始日が終了日より後になっています。")
-            return
-
-        code = self._emp_code()
+        v = self.emp_var.get()
+        code = None if v == "(全員)" else v.split(":", 1)[0].strip()
         rows = self.shift_repo.list_by_range(start_date=s, end_date=e, employee_code=code)
-
-        # 名前引き（必要ならキャッシュに）
-        name_map = {r["code"]: r["name"] for r in self.emp_repo.list_all()}
-
-        total_hours = 0.0
         for r in rows:
-            st_m = _hhmm_to_minutes(r["start_time"])
-            en_m = _hhmm_to_minutes(r["end_time"])
-            mins = max(0, en_m - st_m)
-            h = mins / 60.0
-            total_hours += h
+            self._add_row(id=r["id"], employee_code=r["employee_code"], work_date=r["work_date"],
+                          start_time=r["start_time"], end_time=r["end_time"], note=r.get("note",""))
 
-            code = r["employee_code"]
-            name = name_map.get(code, "")
-            self._add_row(
-                code=code,
-                name=name,
-                work_date=r["work_date"],
-                start=r["start_time"],
-                end=r["end_time"],
-                hours=h,
-                note=r.get("note", "")
+    def _save_selected(self):
+        items = self._selected_maps()
+        if not items:
+            messagebox.showwarning("保存", "保存対象の行にチェックを入れてください。")
+            return
+        for m in items:
+            ok, msg = self._validate(m)
+            if not ok:
+                messagebox.showwarning("入力エラー", msg)
+                return
+        for m in items:
+            rid = self.shift_repo.upsert(
+                id=m["id"], employee_code=m["employee_code"], work_date=m["work_date"],
+                start_time=m["start_time"], end_time=m["end_time"], note=m["note"]
             )
+        messagebox.showinfo("保存", f"{len(items)} 件を保存しました。")
+        self._search()
 
-        self.summary.configure(
-            text=f"件数: {len(rows)}  / 合計時間: {total_hours:.2f} h"
-        )
-
-    def _export_csv(self):
-        s, e = self.start_var.get().strip(), self.end_var.get().strip()
-        code = self._emp_code()
-        rows = self.shift_repo.list_by_range(start_date=s, end_date=e, employee_code=code)
-        if not rows:
-            messagebox.showinfo("CSV", "出力対象データがありません。")
+    def _delete_selected(self):
+        items = self._selected_maps()
+        if not items:
+            messagebox.showwarning("削除", "削除対象の行にチェックを入れてください。")
             return
-
-        path = filedialog.asksaveasfilename(
-            defaultextension=".csv",
-            filetypes=[("CSVファイル","*.csv")],
-            initialfile=f"shifts_{code or 'all'}_{s}_{e}.csv"
-        )
-        if not path:
+        if messagebox.askyesno("確認", f"{len(items)} 件を削除します。よろしいですか？") is False:
             return
-
-        headers = ["id","employee_code","work_date","start_time","end_time","note"]
-        try:
-            with open(path, "w", newline="", encoding="utf-8-sig") as f:
-                w = csv.writer(f)
-                w.writerow(headers + ["hours"])
-                for r in rows:
-                    st = _hhmm_to_minutes(r["start_time"])
-                    en = _hhmm_to_minutes(r["end_time"])
-                    h  = max(0, en - st) / 60.0
-                    w.writerow([r.get(k,"") for k in headers] + [f"{h:.2f}"])
-            messagebox.showinfo("CSV", "CSVを書き出しました。")
-        except Exception as ex:
-            messagebox.showerror("CSV", f"書き出しに失敗しました。\n{ex}")
+        for m in items:
+            if m["id"]:
+                self.shift_repo.delete(m["id"])
+        messagebox.showinfo("削除", f"{len(items)} 件を削除しました。")
+        self._search()
