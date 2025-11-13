@@ -8,6 +8,107 @@ from app.infra.db.shift_repo import ShiftRepo
 from app.infra.db.employee_repo import EmployeeRepo
 
 
+# =========================
+# 共通: カレンダー付き入力
+# =========================
+class DatePickerEntry(ctk.CTkFrame):
+    """
+    クリックでポップアップのカレンダーを表示。
+    「確定」を押した時だけ textvariable に反映。
+    フォーカス外れ・キャンセル時は反映しない。
+    """
+    def __init__(self, master, textvariable=None, width=130, placeholder_text="YYYY-MM-DD"):
+        super().__init__(master)
+        import tkinter as tk
+
+        self.var = textvariable or tk.StringVar()
+        self.entry = ctk.CTkEntry(
+            self, width=width, textvariable=self.var,
+            placeholder_text=placeholder_text, state="readonly"
+        )
+        self.entry.pack(side="left", fill="x")
+        self.entry.bind("<Button-1>", self._open_popup)
+
+        self.btn = ctk.CTkButton(self, text="📅", width=34, command=self._open_popup)
+        self.btn.pack(side="left", padx=4)
+
+        self._popup = None
+        self._cal = None
+
+    def _open_popup(self, *_):
+        import tkinter as tk
+        from tkcalendar import Calendar
+
+        if self._popup and tk.Toplevel.winfo_exists(self._popup):
+            self._popup.destroy()
+
+        x = self.entry.winfo_rootx()
+        y = self.entry.winfo_rooty() + self.entry.winfo_height()
+
+        self._popup = tk.Toplevel(self)
+        self._popup.overrideredirect(True)
+        self._popup.geometry(f"+{x}+{y}")
+        self._popup.attributes("-topmost", True)
+
+        # 既存値で初期化
+        sel = None
+        try:
+            if self.var.get():
+                sel = datetime.strptime(self.var.get(), "%Y-%m-%d").date()
+        except Exception:
+            sel = None
+
+        # “ひと月だけ”の見やすい設定
+        self._cal = Calendar(
+            self._popup,
+            selectmode="day",
+            date_pattern="yyyy-mm-dd",
+            year=(sel.year if sel else date.today().year),
+            month=(sel.month if sel else date.today().month),
+            day=(sel.day if sel else date.today().day),
+            locale="ja_JP",
+            font=("Meiryo UI", 15),
+            showweeknumbers=False,
+            showothermonthdays=False,
+            background="#FFFFFF",
+            foreground="#111111",
+            headersbackground="#E5E7EB",
+            headersforeground="#111111",
+            weekendbackground="#F8FAFC",
+            weekendforeground="#111111",
+            selectbackground="#2563EB",
+            selectforeground="#FFFFFF",
+            bordercolor="#CBD5E1",
+            normalbackground="#FFFFFF",
+            normalforeground="#111111",
+        )
+        self._cal.pack(padx=8, pady=(8, 4))
+
+        # 同サイズボタン
+        BTN_W, BTN_H = 110, 36
+        btns = ctk.CTkFrame(self._popup)
+        btns.pack(fill="x", padx=8, pady=(0, 8))
+        ctk.CTkButton(btns, text="確定", width=BTN_W, height=BTN_H, command=self._ok)\
+            .pack(side="left", padx=(30, 8), pady=4)
+        ctk.CTkButton(btns, text="キャンセル", width=BTN_W, height=BTN_H, command=self._cancel)\
+            .pack(side="right", padx=(8, 30), pady=4)
+
+        self._popup.focus_force()
+        self._popup.bind("<FocusOut>", lambda e: self._cancel())
+
+    def _ok(self):
+        if self._cal:
+            self.var.set(self._cal.get_date())
+        self._cancel()
+
+    def _cancel(self):
+        import tkinter as tk
+        if self._popup and tk.Toplevel.winfo_exists(self._popup):
+            self._popup.destroy()
+        self._popup = None
+        self._cal = None
+
+
 def _today_str():
     return date.today().strftime("%Y-%m-%d")
 
@@ -44,6 +145,8 @@ class ShiftViewScreen(ctk.CTkFrame):
     """
     def __init__(self, master):
         super().__init__(master)
+        import tkinter as tk  # StringVar 用
+
         self.shift_repo = ShiftRepo()
         self.emp_repo = EmployeeRepo()
 
@@ -64,23 +167,23 @@ class ShiftViewScreen(ctk.CTkFrame):
         # 従業員選択
         ctk.CTkLabel(cond, text="従業員:").grid(row=0, column=0, padx=(8,4), pady=8, sticky="w")
         self.emp_values = ["(全員)"] + [f'{r["code"]}:{r["name"]}' for r in self.emp_repo.list_all()]
-        self.emp_var = ctk.StringVar(value=self.emp_values[0])
+        self.emp_var = tk.StringVar(value=self.emp_values[0])
         self.emp_sel = ctk.CTkOptionMenu(cond, values=self.emp_values, variable=self.emp_var, width=200)
         self.emp_sel.grid(row=0, column=1, padx=4, pady=8, sticky="w")
 
-        # 期間
+        # 期間（← カレンダー付きエントリーを使用）
         ctk.CTkLabel(cond, text="期間:").grid(row=0, column=2, padx=(16,4), pady=8, sticky="w")
         s0, e0 = _week_range()
-        self.start_var = ctk.StringVar(value=s0)
-        self.end_var   = ctk.StringVar(value=e0)
-        self.start_e = ctk.CTkEntry(cond, width=120, textvariable=self.start_var, placeholder_text="YYYY-MM-DD")
-        self.end_e   = ctk.CTkEntry(cond, width=120, textvariable=self.end_var,   placeholder_text="YYYY-MM-DD")
-        self.start_e.grid(row=0, column=3, padx=4, pady=8, sticky="w")
-        self.end_e.grid(row=0, column=4, padx=4, pady=8, sticky="w")
+        self.start_var = tk.StringVar(value=s0)
+        self.end_var   = tk.StringVar(value=e0)
+        DatePickerEntry(cond, textvariable=self.start_var, width=130).grid(row=0, column=3, padx=4, pady=8, sticky="w")
+        DatePickerEntry(cond, textvariable=self.end_var,   width=130).grid(row=0, column=4, padx=4, pady=8, sticky="w")
 
-        ctk.CTkButton(cond, text="今日",  width=64, command=self._quick_today).grid(row=0, column=5, padx=4)
-        ctk.CTkButton(cond, text="今週",  width=64, command=self._quick_week).grid(row=0, column=6, padx=4)
-        ctk.CTkButton(cond, text="今月",  width=64, command=self._quick_month).grid(row=0, column=7, padx=4)
+        # 操作用ボタン（サイズ統一）
+        BTN_W = 64
+        ctk.CTkButton(cond, text="今日",  width=BTN_W, command=self._quick_today).grid(row=0, column=5, padx=4)
+        ctk.CTkButton(cond, text="今週",  width=BTN_W, command=self._quick_week).grid(row=0, column=6, padx=4)
+        ctk.CTkButton(cond, text="今月",  width=BTN_W, command=self._quick_month).grid(row=0, column=7, padx=4)
         ctk.CTkButton(cond, text="検索",  width=90, command=self._search).grid(row=0, column=8, padx=(12,4))
         ctk.CTkButton(cond, text="CSV出力", width=90, command=self._export_csv).grid(row=0, column=9, padx=4)
 
@@ -129,8 +232,10 @@ class ShiftViewScreen(ctk.CTkFrame):
 
     def _clear_rows(self):
         for w in self._row_widgets:
-            try: w.destroy()
-            except: pass
+            try:
+                w.destroy()
+            except:
+                pass
         self._row_widgets.clear()
 
     def _add_row(self, code, name, work_date, start, end, hours, note):
@@ -166,7 +271,7 @@ class ShiftViewScreen(ctk.CTkFrame):
         code = self._emp_code()
         rows = self.shift_repo.list_by_range(start_date=s, end_date=e, employee_code=code)
 
-        # 名前引き（必要ならキャッシュに）
+        # 名前キャッシュ
         name_map = {r["code"]: r["name"] for r in self.emp_repo.list_all()}
 
         total_hours = 0.0
@@ -189,9 +294,7 @@ class ShiftViewScreen(ctk.CTkFrame):
                 note=r.get("note", "")
             )
 
-        self.summary.configure(
-            text=f"件数: {len(rows)}  / 合計時間: {total_hours:.2f} h"
-        )
+        self.summary.configure(text=f"件数: {len(rows)}  / 合計時間: {total_hours:.2f} h")
 
     def _export_csv(self):
         s, e = self.start_var.get().strip(), self.end_var.get().strip()
