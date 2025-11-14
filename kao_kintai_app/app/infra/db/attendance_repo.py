@@ -10,6 +10,7 @@ class AttendanceRepo:
         self._init_schema()
 
     def _connect(self):
+        # RowFactoryは都度設定（dict化しやすい）
         return sqlite3.connect(self.db_path)
 
     def _init_schema(self):
@@ -18,12 +19,16 @@ class AttendanceRepo:
             CREATE TABLE IF NOT EXISTS attendance(
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               employee_code TEXT NOT NULL,
-              punch_type TEXT NOT NULL,
-              ts TEXT NOT NULL
+              punch_type TEXT NOT NULL,          -- CLOCK_IN / BREAK_START / BREAK_END / CLOCK_OUT
+              ts TEXT NOT NULL                   -- ISO8601 'YYYY-MM-DDTHH:MM:SS[.fff]'
             );
             """)
+            # 検索高速化
+            con.execute("CREATE INDEX IF NOT EXISTS idx_attendance_emp_ts ON attendance(employee_code, ts);")
+            con.execute("CREATE INDEX IF NOT EXISTS idx_attendance_ts ON attendance(ts);")
             con.commit()
 
+    # ========= CRUD =========
     def add(self, employee_code: str, punch_type: str):
         now = datetime.now().isoformat()
         with self._connect() as con:
@@ -34,7 +39,7 @@ class AttendanceRepo:
             con.commit()
 
     def get_last(self, employee_code: str):
-        """その従業員の直近の打刻1件を返す（なければ None）"""
+        """その従業員の直近の打刻1件を返す（なければ None）。"""
         with self._connect() as con:
             con.row_factory = sqlite3.Row
             cur = con.execute(
@@ -51,6 +56,10 @@ class AttendanceRepo:
         employee_code: str | None = None,
         limit: int = 2000,
     ):
+        """
+        画面の一覧表示用。
+        start_date/end_date は 'YYYY-MM-DD' を想定。
+        """
         where = ["1=1"]
         params: dict[str, object] = {}
         if start_date:
@@ -74,3 +83,35 @@ class AttendanceRepo:
             cur = con.execute(sql, params)
             rows = [dict(r) for r in cur.fetchall()]
         return rows
+
+    # ========= 集計用：月次給与で使用 =========
+    def iter_logs(self, start_date: str, end_date: str, employee_code: str | None = None):
+        """
+        指定期間の勤怠ログを employee_code, type, ts で時系列に返す。
+        - start_date/end_date: 'YYYY-MM-DD'（endは当日を含む）
+        - type: 'CLOCK_IN' / 'CLOCK_OUT' / 'BREAK_START' / 'BREAK_END'
+        - ts: ISO文字列（'YYYY-MM-DDTHH:MM:SS' など）
+        """
+        q = """
+          SELECT employee_code,
+                 punch_type AS type,   -- ← 重要：列別名で 'type' に揃える
+                 ts
+          FROM attendance
+          WHERE ts BETWEEN ? AND ?
+        """
+        # 日境界を含むように00:00:00〜23:59:59で絞る
+        s = f"{start_date}T00:00:00"
+        e = f"{end_date}T23:59:59"
+
+        params = [s, e]
+        if employee_code:
+            q += " AND employee_code = ?"
+            params.append(employee_code)
+        q += " ORDER BY employee_code, ts"
+
+        with self._connect() as con:
+            con.row_factory = sqlite3.Row
+            cur = con.execute(q, params)
+            rows = cur.fetchall()
+
+        return [{"employee_code": r["employee_code"], "type": r["type"], "ts": r["ts"]} for r in rows]

@@ -41,7 +41,7 @@ class AppShell(ctk.CTkFrame):
             ("🏠 ホーム", "home"),
             ("📷 顔認証 打刻", "face"),
             ("📑 勤怠一覧", "list"),
-            ("🗓 シフト", "shift"),  
+            ("🗓 シフト", "shift"),
             ("👤 マイ勤怠", "my"),
             ("🛠 管理者", "admin"),
         ]:
@@ -123,6 +123,8 @@ class AppShell(ctk.CTkFrame):
         from .screens.admin_account_register_screen import AdminAccountRegisterScreen
         from .screens.face_data_screen import FaceDataScreen
         from .screens.shift_editor_screen import ShiftEditorScreen
+        # ★ 追加：su専用 従業員一覧（時給編集）
+        from .screens.employee_su_overview_screen import EmployeeSuOverviewScreen
 
         ctk.CTkButton(
             self.subnav, text="👥 従業員登録 / 編集",
@@ -144,6 +146,11 @@ class AppShell(ctk.CTkFrame):
         ctk.CTkButton(
             self.subnav, text="🗓 シフト作成 / 編集",
             command=lambda: self._swap_right(ShiftEditorScreen)
+        ).pack(padx=8, pady=4, fill="x")
+        # ★ su専用：従業員一覧（時給編集）
+        ctk.CTkButton(
+            self.subnav, text="📊 従業員一覧（時給）[su]",
+            command=lambda: self._swap_right(EmployeeSuOverviewScreen)
         ).pack(padx=8, pady=4, fill="x")
 
     # ===== 右ペイン差し替え（クラス/ファクトリ両対応） =====
@@ -206,7 +213,6 @@ class AppShell(ctk.CTkFrame):
             screen = MyAttendanceScreen(self.body)
         elif key == "shift":
             screen = ShiftViewScreen(self.body)
-
         else:
             screen = HomeScreen(self.body)
 
