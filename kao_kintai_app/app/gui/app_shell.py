@@ -28,15 +28,16 @@ class AppShell(ctk.CTkFrame):
         self.att_repo = AttendanceRepo()
         self.search_popup: tk.Toplevel | None = None
 
-        # レイアウト
+        # レイアウト（左ナビ:右メイン = 1:4 の比率で伸縮）
         self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1, minsize=220)  # 最低 220px は確保
+        self.grid_columnconfigure(1, weight=4)
 
         # ===== 左ナビ =====
         # ※ width / grid_propagate(False) を外して、グリッド比率で伸縮させる
         self.nav = ctk.CTkFrame(self)
         self.nav.grid(row=0, column=0, sticky="nsew")
-        
+
         ctk.CTkLabel(
             self.nav,
             text=cfg.get("app_name", "Kao-Kintai"),
