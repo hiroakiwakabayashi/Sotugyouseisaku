@@ -30,14 +30,15 @@ class AppShell(ctk.CTkFrame):
 
         # レイアウト（左ナビ:右メイン = 1:4 の比率で伸縮）
         self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=1, minsize=220)  # 最低 220px は確保
-        self.grid_columnconfigure(1, weight=4)
+        self.grid_columnconfigure(0, weight=0, minsize=220)  # 最低 220px は確保
+        self.grid_columnconfigure(1, weight=1)
 
         # ===== 左ナビ =====
         # ※ width / grid_propagate(False) を外して、グリッド比率で伸縮させる
-        self.nav = ctk.CTkFrame(self)
+        self.nav = ctk.CTkFrame(self, width=220)
         self.nav.grid(row=0, column=0, sticky="nsew")
-
+        self.nav.grid_propagate(False)
+        
         ctk.CTkLabel(
             self.nav,
             text=cfg.get("app_name", "Kao-Kintai"),
@@ -124,9 +125,15 @@ class AppShell(ctk.CTkFrame):
 
         self._screens = {}
 
-        # 画面どこかクリックでサジェストを閉じる
+        # ルートウィンドウのイベントにフック
         root = self.winfo_toplevel()
+        # 画面どこかクリックでサジェストを閉じる
         root.bind("<Button-1>", self._on_root_click, add="+")
+        # 位置/サイズ変更 → サジェスト位置追従
+        root.bind("<Configure>", self._on_root_configure, add="+")
+        # 最小化/フォーカス喪失 → サジェスト閉じる
+        root.bind("<Unmap>", lambda e: self._destroy_search_popup(), add="+")
+        root.bind("<FocusOut>", lambda e: self._destroy_search_popup(), add="+")
 
         self.show("home")
 
@@ -204,9 +211,11 @@ class AppShell(ctk.CTkFrame):
 
         # --- Toplevel 準備 ---
         if self.search_popup is None or not tk.Toplevel.winfo_exists(self.search_popup):
-            self.search_popup = tk.Toplevel(self)
+            # ルートウィンドウ配下に作成（他アプリの最前面にはしない）
+            root = self.winfo_toplevel()
+            self.search_popup = tk.Toplevel(root)
             self.search_popup.overrideredirect(True)
-            self.search_popup.attributes("-topmost", True)
+            # ★ -topmost は付けない：他アプリを邪魔しない
 
         self.search_popup.geometry(f"{width}x{height}+{x}+{y}")
         self.search_popup.lift()
@@ -316,6 +325,19 @@ class AppShell(ctk.CTkFrame):
         if self._is_child_of_popup(w):
             return
         self._destroy_search_popup()
+
+    def _on_root_configure(self, event: tk.Event):
+        """
+        ルートウィンドウの位置/サイズが変わったときに呼ばれる。
+        ポップアップがあれば、検索ボックスの位置に追従させる。
+        """
+        if self.search_popup is None or not tk.Toplevel.winfo_exists(self.search_popup):
+            return
+        width = self.search_popup.winfo_width()
+        height = self.search_popup.winfo_height()
+        x = self.search_container.winfo_rootx()
+        y = self.search_container.winfo_rooty() + self.search_container.winfo_height()
+        self.search_popup.geometry(f"{width}x{height}+{x}+{y}")
 
     def _select_search_result(self, record: dict):
         name = record.get("name", "")
