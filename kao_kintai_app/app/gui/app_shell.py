@@ -1,5 +1,4 @@
 import customtkinter as ctk
-import os
 import tkinter as tk
 from datetime import datetime
 
@@ -477,26 +476,37 @@ class AppShell(ctk.CTkFrame):
 
 
 def run_app(cfg: dict):
+    # ===== テーマ & スケールを固定 =====
     ctk.set_appearance_mode("light")
     ctk.set_default_color_theme("blue")
-    ctk.set_widget_scaling(1.0)
-    ctk.set_window_scaling(1.0)
+    ctk.set_widget_scaling(1.0)   # ウィジェット倍率固定
+    ctk.set_window_scaling(1.0)   # ウィンドウ倍率固定
 
     root = ctk.CTk()
     root.title(cfg.get("app_name", "Kao-Kintai"))
 
+    # ===== どのPCでも同じレイアウトになるように論理サイズを固定 =====
+    width, height = 1280, 720
+    root.geometry(f"{width}x{height}")
+    root.minsize(width, height)
+    root.maxsize(width, height)
+
+    # 画面中央に配置
+    root.update_idletasks()
+    sw = root.winfo_screenwidth()
+    sh = root.winfo_screenheight()
+    x = int((sw - width) / 2)
+    y = int((sh - height) / 2)
+    root.geometry(f"{width}x{height}+{x}+{y}")
+
+    # レイアウト
     root.grid_rowconfigure(0, weight=1)
     root.grid_columnconfigure(0, weight=1)
 
     shell = AppShell(master=root, cfg=cfg)
     shell.grid(row=0, column=0, sticky="nsew")
 
-    if os.name == "nt":
-        root.state("zoomed")
-    else:
-        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        root.geometry(f"{sw}x{sh}+0+0")
-
+    # 履歴ナビ用ショートカット
     root.bind("<Control-Left>", lambda e: shell._hist(-1))
     root.bind("<Control-Right>", lambda e: shell._hist(+1))
 
