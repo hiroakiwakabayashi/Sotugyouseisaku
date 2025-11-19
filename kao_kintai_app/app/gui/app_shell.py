@@ -33,10 +33,10 @@ class AppShell(ctk.CTkFrame):
         self.grid_columnconfigure(1, weight=1)
 
         # ===== 左ナビ =====
-        self.nav = ctk.CTkFrame(self, width=220)
-        self.nav.grid(row=0, column=0, sticky="nsw")
-        self.nav.grid_propagate(False)
-
+        # ※ width / grid_propagate(False) を外して、グリッド比率で伸縮させる
+        self.nav = ctk.CTkFrame(self)
+        self.nav.grid(row=0, column=0, sticky="nsew")
+        
         ctk.CTkLabel(
             self.nav,
             text=cfg.get("app_name", "Kao-Kintai"),
