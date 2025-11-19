@@ -1,4 +1,5 @@
 import customtkinter as ctk
+import os
 import tkinter as tk
 from datetime import datetime
 
@@ -485,19 +486,14 @@ def run_app(cfg: dict):
     root = ctk.CTk()
     root.title(cfg.get("app_name", "Kao-Kintai"))
 
-    # ===== どのPCでも同じレイアウトになるように論理サイズを固定 =====
-    width, height = 1280, 720
-    root.geometry(f"{width}x{height}")
-    root.minsize(width, height)
-    root.maxsize(width, height)
-
-    # 画面中央に配置
-    root.update_idletasks()
-    sw = root.winfo_screenwidth()
-    sh = root.winfo_screenheight()
-    x = int((sw - width) / 2)
-    y = int((sh - height) / 2)
-    root.geometry(f"{width}x{height}+{x}+{y}")
+    # フルスクリーン（PCごとに共通レイアウトを保ちつつ全画面表示）
+    if os.name == "nt":
+        # Windows はズーム（最大化）状態
+        root.state("zoomed")
+    else:
+        # mac / Linux は画面サイズいっぱいに
+        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+        root.geometry(f"{sw}x{sh}+0+0")
 
     # レイアウト
     root.grid_rowconfigure(0, weight=1)
