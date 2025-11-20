@@ -126,10 +126,19 @@ class AppShell(ctk.CTkFrame):
         self.search_entry.bind("<Return>", self._on_search)
         self.search_entry.bind("<Button-1>", self._on_search_click)
 
-        # プロフィールボタン
-        ctk.CTkButton(self.header, text="👤", width=36).pack(
-            side="right", padx=8, pady=6
+        # --- プロフィールボタン（元コード）
+        # ctk.CTkButton(self.header, text="👤", width=36).pack(
+        #     side="right", padx=8, pady=6
+        # )
+
+        # ▼【追加】プロフィールボタン（押すとメニュー表示）
+        self.profile_btn = ctk.CTkButton(
+            self.header, text="👤", width=36, command=self._toggle_profile_menu
         )
+        self.profile_btn.pack(side="right", padx=8, pady=6)
+
+        # ▼【追加】プロフィールメニュー用 Toplevel
+        self.profile_menu: tk.Toplevel | None = None
 
         # --- body ---
         self.body = ctk.CTkFrame(self.right)
@@ -148,8 +157,15 @@ class AppShell(ctk.CTkFrame):
         root.bind("<Configure>", self._on_root_configure, add="+")
         # ウィンドウが最小化（タスクバーにしまわれる）されたときにサジェストを閉じる
         root.bind("<Unmap>", self._on_root_unmap, add="+")
+        root.bind("<FocusOut>", self._on_root_focus_out, add="+")
 
         self.show("home")
+
+    def _on_root_focus_out(self, event: tk.Event):
+        """別アプリをアクティブにしたときなど、rootのフォーカスが外れたら閉じる"""
+        self._destroy_search_popup()
+        self._destroy_profile_menu()
+
 
     # ================= 検索系 =================
     def _on_search(self, event=None):
@@ -220,7 +236,10 @@ class AppShell(ctk.CTkFrame):
         if self.search_popup is None or not tk.Toplevel.winfo_exists(self.search_popup):
             self.search_popup = tk.Toplevel(self)
             self.search_popup.overrideredirect(True)
-            self.search_popup.attributes("-topmost", True)
+
+            # 親ウィンドウに紐づける（別アプリを前面に出したら一緒に隠れる）
+            root = self.winfo_toplevel()
+            self.search_popup.transient(root)
 
         # ▼位置だけを別メソッドで更新
         self._update_search_popup_position()
@@ -313,19 +332,19 @@ class AppShell(ctk.CTkFrame):
 
         self.search_popup.geometry(f"{width}x{height}+{x}+{y}")
         self.search_popup.lift()
-
+        
     def _on_root_configure(self, event: tk.Event):
-        """ウィンドウのサイズ変更・移動・最小化時の共通処理"""
+        """ウィンドウのサイズ変更・移動・状態変更時の共通処理"""
         root = self.winfo_toplevel()
+        state = str(root.state())
 
-        # 最小化（iconic）や最大化以外の状態も含め、
-        # 「通常状態 (normal) 以外」になったらサジェストは閉じる。
-        state = root.state()
-        if state != "normal":
+        # ▼最小化（iconic）または非表示（withdrawn）のときだけポップアップを閉じる
+        if state in ("iconic", "withdrawn"):
             self._destroy_search_popup()
+            self._destroy_profile_menu()
             return
 
-        # 通常状態なら位置だけ追従させる
+        # それ以外（normal / zoomed）は「表示されたまま」位置だけ追従させる
         self._update_search_popup_position()
 
     def _on_root_unmap(self, event: tk.Event):
@@ -333,12 +352,168 @@ class AppShell(ctk.CTkFrame):
         # ルートウィンドウがタスクバーにしまわれたタイミングで、
         # 画面上にサジェストだけ取り残されないよう必ず破棄する。
         self._destroy_search_popup()
+        self._destroy_profile_menu()
 
 
     def _destroy_search_popup(self):
         if self.search_popup and tk.Toplevel.winfo_exists(self.search_popup):
             self.search_popup.destroy()
         self.search_popup = None
+
+    def _destroy_profile_menu(self):
+        """プロフィールメニューを閉じる"""
+        if self.profile_menu and tk.Toplevel.winfo_exists(self.profile_menu):
+            self.profile_menu.destroy()
+        self.profile_menu = None
+
+    # ================= プロフィールメニュー =================
+
+    def _toggle_profile_menu(self):
+        """プロフィールメニューを開閉"""
+
+        # すでに開いている場合は閉じる（トグル）
+        if self.profile_menu and tk.Toplevel.winfo_exists(self.profile_menu):
+            self._destroy_profile_menu()
+            return
+
+        # current_admin が None の場合はメニュー表示しない
+        user = self.current_admin
+        if not user:
+            return
+
+        # --- Toplevel 作成 ---
+        self.profile_menu = tk.Toplevel(self)
+        self.profile_menu.withdraw() 
+
+        # いったん非表示のまま設定・レイアウトを行う
+        self.profile_menu.withdraw()
+
+        self.profile_menu.overrideredirect(True)
+        self.profile_menu.attributes("-topmost", True)  # 以前と同じく最前面フラグ
+
+        # 親ウィンドウ（root）と連動させる
+        root = self.winfo_toplevel()
+        self.profile_menu.transient(root)
+
+        # --- 外枠 ---
+        outer = ctk.CTkFrame(self.profile_menu, corner_radius=12, fg_color="white")
+        outer.pack(fill="both", expand=True)
+
+        # ========= 管理者情報部分 =========
+        name = user.get("name") or user.get("username", "Unknown")
+        role_code = user.get("role", "admin")
+        role_label = "システム管理者" if role_code == "su" else "一般管理者"
+
+        # 情報表示用フレーム（3列グリッド）
+        info_frame = ctk.CTkFrame(outer, fg_color="white")
+        info_frame.pack(fill="x", padx=12, pady=(12, 8))
+
+        # 1行目：名前
+        ctk.CTkLabel(
+            info_frame,
+            text=f"👤 {name}",
+            font=("Meiryo UI", 14, "bold"),
+            text_color="#111",
+        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
+
+        label_width = 60  # 「ID」「権限」の幅をそろえる
+
+        # 2行目：ID
+        ctk.CTkLabel(
+            info_frame,
+            text="ID",
+            width=label_width,
+            anchor="center",
+            font=("Meiryo UI", 12),
+        ).grid(row=1, column=0, sticky="w", pady=2)
+
+        ctk.CTkLabel(
+            info_frame,
+            text="：",
+            width=10,
+            font=("Meiryo UI", 12),
+        ).grid(row=1, column=1, sticky="w", pady=2)
+
+        ctk.CTkLabel(
+            info_frame,
+            text=user.get("username", "-"),
+            font=("Meiryo UI", 12),
+        ).grid(row=1, column=2, sticky="w", pady=2)
+
+        # 3行目：権限
+        ctk.CTkLabel(
+            info_frame,
+            text="権限",
+            width=label_width,
+            anchor="center",
+            font=("Meiryo UI", 12),
+        ).grid(row=2, column=0, sticky="w", pady=2)
+
+        ctk.CTkLabel(
+            info_frame,
+            text="：",
+            width=10,
+            font=("Meiryo UI", 12),
+        ).grid(row=2, column=1, sticky="w", pady=2)
+
+        ctk.CTkLabel(
+            info_frame,
+            text=role_label,
+            font=("Meiryo UI", 12),
+        ).grid(row=2, column=2, sticky="w", pady=2)
+
+        # 区切り線
+        ctk.CTkFrame(outer, height=1, fg_color="#E5E7EB").pack(
+            fill="x", padx=8, pady=(4, 4)
+        )
+
+        # ========= ログアウトボタン =========
+        logout_btn = ctk.CTkButton(
+            outer,
+            text="🔓  ログアウト",
+            fg_color="#ef4444",
+            hover_color="#dc2626",
+            text_color="white",
+            corner_radius=10,
+            height=44,
+            font=("Meiryo UI", 14, "bold"),
+            command=self._logout_admin,
+        )
+        logout_btn.pack(fill="x", padx=16, pady=(12, 16))
+
+        # ===== 実サイズ確定後に、「👤ボタンのすぐ下・右端ぴったり」に配置 =====
+        self.profile_menu.update_idletasks()
+
+        # ボタンの画面座標とサイズ
+        bx = self.profile_btn.winfo_rootx()
+        by = self.profile_btn.winfo_rooty()
+        bw = self.profile_btn.winfo_width()
+        bh = self.profile_btn.winfo_height()
+
+        # メニューの実サイズ
+        menu_w = self.profile_menu.winfo_width()
+        menu_h = self.profile_menu.winfo_height()
+
+        # メニュー右端 = ボタン右端
+        x = bx + bw - menu_w
+        # メニュー上端 = ボタン下端 + 4px
+        y = by + bh + 4
+
+        # 位置を反映して表示
+        self.profile_menu.geometry(f"{menu_w}x{menu_h}+{x}+{y}")
+        self.profile_menu.deiconify()
+
+    def _logout_admin(self):
+        """管理者をログアウトさせる"""
+        # メニューを閉じる
+        self._destroy_profile_menu()
+
+        # 管理者情報をクリア
+        self.current_admin = None
+        self._clear_subnav()
+
+        # ホーム画面へ戻す
+        self.show("home")
 
     def _is_child_of_popup(self, widget: tk.Widget) -> bool:
         if self.search_popup is None:
