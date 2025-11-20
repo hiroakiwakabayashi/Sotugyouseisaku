@@ -1,58 +1,51 @@
-# app/gui/screens/my_attendance_screen.py
+# -*- coding: utf-8 -*-
 import customtkinter as ctk
-from tkinter import messagebox, filedialog
-from datetime import date, datetime
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+from datetime import datetime, date
 import csv
 
 from app.infra.db.employee_repo import EmployeeRepo
 from app.infra.db.attendance_repo import AttendanceRepo
+from app.services.attendance_service import AttendanceService
 
 
 # ===============================================================
-# カレンダー付きエントリー（確定/キャンセル付き・同サイズボタン）
+# カレンダー付きエントリー（読み取り専用 + 確定/キャンセル）
 # ===============================================================
 class DatePickerEntry(ctk.CTkFrame):
-    """
-    クリックでポップアップのカレンダーを表示。
-    「確定」を押したときだけ textvariable に反映。
-    フォーカスが外れたら自動で閉じる（＝反映しない）。
-    """
-    def __init__(self, master, textvariable=None, width=130, placeholder_text="YYYY-MM-DD"):
+    def __init__(self, master, textvariable: tk.StringVar | None = None,
+                 width=130, placeholder_text="YYYY-MM-DD"):
         super().__init__(master)
-        import tkinter as tk  # 局所 import（Tk と競合しないように）
-
         self.var = textvariable or tk.StringVar()
+
         self.entry = ctk.CTkEntry(
-            self, width=width, textvariable=self.var,
+            self, textvariable=self.var, width=width,
             placeholder_text=placeholder_text, state="readonly"
         )
         self.entry.pack(side="left", fill="x")
-        self.entry.bind("<Button-1>", self._open_popup)
+        self.entry.bind("<Button-1>", self._open)
 
-        self.btn = ctk.CTkButton(self, text="📅", width=34, command=self._open_popup)
+        self.btn = ctk.CTkButton(self, text="📅", width=34, command=self._open)
         self.btn.pack(side="left", padx=4)
 
-        self._popup = None
-        self._cal = None
+        self.popup: tk.Toplevel | None = None
+        self.cal = None
 
-    def _open_popup(self, *_):
-        import tkinter as tk
+    def _open(self, *_):
         from tkcalendar import Calendar
 
-        # 既存ポップアップがあれば閉じる
-        if self._popup and tk.Toplevel.winfo_exists(self._popup):
-            self._popup.destroy()
+        if self.popup and tk.Toplevel.winfo_exists(self.popup):
+            self.popup.destroy()
 
-        # エントリー直下に表示
         x = self.entry.winfo_rootx()
         y = self.entry.winfo_rooty() + self.entry.winfo_height()
 
-        self._popup = tk.Toplevel(self)
-        self._popup.overrideredirect(True)
-        self._popup.geometry(f"+{x}+{y}")
-        self._popup.attributes("-topmost", True)
+        self.popup = tk.Toplevel(self)
+        self.popup.overrideredirect(True)
+        self.popup.geometry(f"+{x}+{y}")
+        self.popup.attributes("-topmost", True)
 
-        # 既存値を初期選択に
         selected = None
         try:
             if self.var.get():
@@ -60,9 +53,8 @@ class DatePickerEntry(ctk.CTkFrame):
         except Exception:
             selected = None
 
-        # カレンダー本体（“ひと月だけ”の見やすい設定）
-        self._cal = Calendar(
-            self._popup,
+        self.cal = Calendar(
+            self.popup,
             selectmode="day",
             date_pattern="yyyy-mm-dd",
             year=(selected.year if selected else date.today().year),
@@ -72,283 +64,245 @@ class DatePickerEntry(ctk.CTkFrame):
             font=("Meiryo UI", 15),
             showweeknumbers=False,
             showothermonthdays=False,
-            background="#FFFFFF",
-            foreground="#111111",
-            headersbackground="#E5E7EB",
-            headersforeground="#111111",
-            weekendbackground="#F8FAFC",
-            weekendforeground="#111111",
-            selectbackground="#2563EB",
-            selectforeground="#FFFFFF",
-            bordercolor="#CBD5E1",
-            normalbackground="#FFFFFF",
-            normalforeground="#111111",
         )
-        self._cal.pack(padx=8, pady=(8, 4))
+        self.cal.pack(padx=8, pady=(8, 4))
 
-        # 同サイズボタン
-        BTN_W, BTN_H = 110, 36
-        btns = ctk.CTkFrame(self._popup)
+        CAL_BTN_W, CAL_BTN_H = 110, 36
+        btns = ctk.CTkFrame(self.popup)
         btns.pack(fill="x", padx=8, pady=(0, 8))
 
-        ctk.CTkButton(btns, text="確定", width=BTN_W, height=BTN_H, command=self._ok)\
+        ctk.CTkButton(btns, text="確定", width=CAL_BTN_W, height=CAL_BTN_H, command=self._ok)\
             .pack(side="left", padx=(30, 8), pady=4)
-        ctk.CTkButton(btns, text="キャンセル", width=BTN_W, height=BTN_H, command=self._cancel)\
+        ctk.CTkButton(btns, text="キャンセル", width=CAL_BTN_W, height=CAL_BTN_H, command=self._cancel)\
             .pack(side="right", padx=(8, 30), pady=4)
 
-        # フォーカスを失ったら閉じる（＝確定しない）
-        self._popup.focus_force()
-        self._popup.bind("<FocusOut>", lambda e: self._cancel())
+        self.popup.focus_force()
+        self.popup.bind("<FocusOut>", lambda e: self._cancel())
 
     def _ok(self):
-        if self._cal:
-            self.var.set(self._cal.get_date())
+        if self.cal:
+            self.var.set(self.cal.get_date())
         self._cancel()
 
     def _cancel(self):
-        import tkinter as tk
-        if self._popup and tk.Toplevel.winfo_exists(self._popup):
-            self._popup.destroy()
-        self._popup = None
-        self._cal = None
+        if self.popup and tk.Toplevel.winfo_exists(self.popup):
+            self.popup.destroy()
+        self.popup = None
+        self.cal = None
 
 
-# 既定の打刻種別（プロジェクトで使っているもの）
-TYPES_ORDER = ["CLOCK_IN", "BREAK_START", "BREAK_END", "CLOCK_OUT"]
-
-def _today_str():
-    return date.today().strftime("%Y-%m-%d")
-
-def _yyyymm_first_last():
-    d = date.today()
-    first = d.replace(day=1)
-    # 次月の1日-1日 = 当月末日
-    if d.month == 12:
-        next_first = d.replace(year=d.year + 1, month=1, day=1)
-    else:
-        next_first = d.replace(month=d.month + 1, day=1)
-    last = next_first.fromordinal(next_first.toordinal() - 1)
-    return first.strftime("%Y-%m-%d"), last.strftime("%Y-%m-%d")
-
-
+# ===============================================================
+# マイ勤怠（日別：実働/休憩 集計 + CSV）
+# ===============================================================
 class MyAttendanceScreen(ctk.CTkFrame):
-    """
-    マイ勤怠（閲覧専用）
-    - 従業員選択（プルダウン）
-    - 期間絞り込み（今日 / 今月 / 任意）
-    - 一覧表示（時刻・種別）
-    - 件数サマリ（種別ごと）
-    - CSV保存
-    """
     def __init__(self, master):
         super().__init__(master)
-
         self.emp_repo = EmployeeRepo()
         self.att_repo = AttendanceRepo()
+        self.svc = AttendanceService(self.att_repo)
 
+        # UI変数
+        self.start_var = tk.StringVar()
+        self.end_var = tk.StringVar()
+        # 従業員はドロップダウンから選択（ログイン概念なしMVP）
+        self.emp_var = tk.StringVar()
+
+        # 合計表示
+        self.sum_work_var = tk.StringVar(value="実働合計: 0.00 h")
+        self.sum_break_var = tk.StringVar(value="休憩合計: 0.00 h")
+
+        # レイアウト
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        # ===== タイトル =====
-        ctk.CTkLabel(self, text="👤 マイ勤怠（閲覧）", font=("Meiryo UI", 18, "bold"))\
-            .grid(row=0, column=0, sticky="w", padx=12, pady=(12, 6))
-
-        # ===== 条件行 =====
-        cond = ctk.CTkFrame(self)
-        cond.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 6))
-        for i in range(10):
-            cond.grid_columnconfigure(i, weight=0)
-        cond.grid_columnconfigure(9, weight=1)
-
-        # 従業員選択
-        ctk.CTkLabel(cond, text="従業員:").grid(row=0, column=0, padx=(8, 4), pady=8, sticky="w")
-        self.emp_values = self._build_emp_values()
-        import tkinter as tk  # for StringVar
-        self.emp_var = tk.StringVar(value=self.emp_values[0] if self.emp_values else "(従業員未登録)")
-        self.emp_sel = ctk.CTkOptionMenu(cond, values=self.emp_values or ["(従業員未登録)"],
-                                         variable=self.emp_var, width=220)
-        self.emp_sel.grid(row=0, column=1, padx=4, pady=8, sticky="w")
-
-        # 期間（← ここをカレンダー付きエントリーに変更）
-        ctk.CTkLabel(cond, text="期間:").grid(row=0, column=2, padx=(16, 4), pady=8, sticky="w")
-        s0, e0 = _yyyymm_first_last()
-        self.start_var = tk.StringVar(value=s0)
-        self.end_var   = tk.StringVar(value=e0)
-
-        DatePickerEntry(cond, textvariable=self.start_var, width=130).grid(
-            row=0, column=3, padx=4, pady=8, sticky="w"
-        )
-        DatePickerEntry(cond, textvariable=self.end_var, width=130).grid(
-            row=0, column=4, padx=4, pady=8, sticky="w"
+        # タイトル
+        ctk.CTkLabel(self, text="👤 マイ勤怠（日別 実働 / 休憩 集計）", font=("Meiryo UI", 22, "bold")).grid(
+            row=0, column=0, sticky="w", padx=16, pady=(16, 8)
         )
 
-        ctk.CTkButton(cond, text="今日",  width=64, command=self._quick_today).grid(row=0, column=5, padx=4)
-        ctk.CTkButton(cond, text="今月",  width=64, command=self._quick_month).grid(row=0, column=6, padx=4)
-        ctk.CTkButton(cond, text="検索",  width=92, command=self._search).grid(row=0, column=7, padx=(12, 4))
-        ctk.CTkButton(cond, text="CSV保存", width=92, command=self._export_csv).grid(row=0, column=8, padx=4)
+        # フィルタ行
+        filt = ctk.CTkFrame(self)
+        filt.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 8))
+        for i in range(12):
+            filt.grid_columnconfigure(i, weight=0)
+        filt.grid_columnconfigure(11, weight=1)
 
-        # ===== 一覧＋サマリ =====
-        body = ctk.CTkFrame(self)
-        body.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 12))
-        body.grid_rowconfigure(1, weight=1)
-        body.grid_columnconfigure(0, weight=1)
+        # 従業員
+        ctk.CTkLabel(filt, text="従業員").grid(row=0, column=0, padx=(8, 4), pady=6, sticky="e")
+        self.emp_menu = ctk.CTkOptionMenu(filt, values=self._employee_options(), variable=self.emp_var, width=260)
+        self.emp_menu.grid(row=0, column=1, padx=(0, 12), pady=6, sticky="w")
 
-        # ヘッダ
-        head = ctk.CTkFrame(body, fg_color="transparent")
-        head.grid(row=0, column=0, sticky="ew")
-        for i, h in enumerate(["日時", "種別", "メモ"]):
-            ctk.CTkLabel(head, text=h, anchor="w").grid(row=0, column=i, padx=8, pady=6, sticky="w")
-            head.grid_columnconfigure(i, weight=1 if i < 3 else 0)
+        # 期間
+        ctk.CTkLabel(filt, text="開始日").grid(row=0, column=2, padx=(8, 4), pady=6, sticky="e")
+        DatePickerEntry(filt, textvariable=self.start_var, width=130).grid(
+            row=0, column=3, padx=(0, 12), pady=6, sticky="w"
+        )
+        ctk.CTkLabel(filt, text="終了日").grid(row=0, column=4, padx=(8, 4), pady=6, sticky="e")
+        DatePickerEntry(filt, textvariable=self.end_var, width=130).grid(
+            row=0, column=5, padx=(0, 12), pady=6, sticky="w"
+        )
 
-        # スクロール領域
-        self.scroll = ctk.CTkScrollableFrame(body, height=420)
-        self.scroll.grid(row=1, column=0, sticky="nsew")
-        self._row_widgets = []
+        BTN_W, BTN_H = 120, 36
+        ctk.CTkButton(filt, text="検索", width=BTN_W, height=BTN_H, command=self.search)\
+            .grid(row=0, column=6, padx=4, pady=6)
+        ctk.CTkButton(filt, text="今日", width=BTN_W, height=BTN_H, command=self.quick_today)\
+            .grid(row=0, column=7, padx=4, pady=6)
+        ctk.CTkButton(filt, text="今月", width=BTN_W, height=BTN_H, command=self.quick_month)\
+            .grid(row=0, column=8, padx=4, pady=6)
+        ctk.CTkButton(filt, text="今年", width=BTN_W, height=BTN_H, command=self.quick_year)\
+            .grid(row=0, column=9, padx=4, pady=6)
+        ctk.CTkButton(filt, text="CSV出力", width=BTN_W, height=BTN_H, command=self.export_csv)\
+            .grid(row=0, column=10, padx=4, pady=6)
 
-        # サマリ
-        self.summary = ctk.CTkLabel(body, text="—", anchor="w")
-        self.summary.grid(row=2, column=0, sticky="ew", padx=8, pady=(8, 4))
+        # 表
+        table_wrap = ctk.CTkFrame(self)
+        table_wrap.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 8))
+        table_wrap.grid_rowconfigure(0, weight=1)
+        table_wrap.grid_columnconfigure(0, weight=1)
 
-        # 初期検索
-        self._search()
+        self.tree = ttk.Treeview(
+            table_wrap,
+            columns=("date", "code", "name", "work_m", "work_h", "break_m", "break_h"),
+            show="headings",
+            height=18
+        )
+        self.tree.heading("date",    text="日付")
+        self.tree.heading("code",    text="コード")
+        self.tree.heading("name",    text="氏名")
+        self.tree.heading("work_m",  text="実働(分)")
+        self.tree.heading("work_h",  text="実働(時間)")
+        self.tree.heading("break_m", text="休憩(分)")
+        self.tree.heading("break_h", text="休憩(時間)")
 
-    # ===== 内部ユーティリティ =====
-    def _build_emp_values(self):
-        # "E0001:山田 太郎" の並びでプルダウン用配列を作る
-        values = []
-        for r in self.emp_repo.list_all():
-            values.append(f'{r["code"]}:{r["name"]}')
-        if not values:
-            return []
-        return values
+        self.tree.column("date",    width=120, anchor="center")
+        self.tree.column("code",    width=120, anchor="center")
+        self.tree.column("name",    width=160, anchor="w")
+        self.tree.column("work_m",  width=110, anchor="e")
+        self.tree.column("work_h",  width=120, anchor="e")
+        self.tree.column("break_m", width=110, anchor="e")
+        self.tree.column("break_h", width=120, anchor="e")
 
-    def _get_selected_code(self) -> str | None:
-        if not self.emp_values:
-            return None
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        yscroll = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=yscroll.set)
+        yscroll.grid(row=0, column=1, sticky="ns")
+
+        # 合計行
+        sum_bar = ctk.CTkFrame(self)
+        sum_bar.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 12))
+        sum_bar.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(sum_bar, textvariable=self.sum_work_var, font=("Meiryo UI", 14)).pack(side="left", padx=6)
+        ctk.CTkLabel(sum_bar, textvariable=self.sum_break_var, font=("Meiryo UI", 14)).pack(side="left", padx=16)
+
+        # 初期表示：当月 & 先頭の従業員
+        opts = self._employee_options()
+        if opts:
+            self.emp_var.set(opts[0])
+        self.quick_month()
+
+    # ====== 従業員オプション ======
+    def _employee_options(self):
+        rows = self.emp_repo.list_all()
+        return [f"{r['code']} {r['name']}" for r in rows]
+
+    def _emp_code_selected(self) -> str | None:
         v = self.emp_var.get()
-        if ":" not in v:
+        if not v:
             return None
-        return v.split(":", 1)[0].strip()
+        return v.split(" ")[0] if " " in v else v
 
-    def _quick_today(self):
-        t = _today_str()
-        self.start_var.set(t); self.end_var.set(t)
-        self._search()
-
-    def _quick_month(self):
-        s, e = _yyyymm_first_last()
-        self.start_var.set(s); self.end_var.set(e)
-        self._search()
-
-    def _clear_rows(self):
-        for w in self._row_widgets:
-            try:
-                w.destroy()
-            except:
-                pass
-        self._row_widgets.clear()
-
-    def _add_row(self, dt_text: str, typ: str, memo: str = ""):
-        r = len(self._row_widgets)
-        lbl_dt = ctk.CTkLabel(self.scroll, text=dt_text, anchor="w")
-        lbl_ty = ctk.CTkLabel(self.scroll, text=typ, anchor="w")
-        lbl_me = ctk.CTkLabel(self.scroll, text=memo, anchor="w")
-        lbl_dt.grid(row=r, column=0, padx=8, pady=3, sticky="w")
-        lbl_ty.grid(row=r, column=1, padx=8, pady=3, sticky="w")
-        lbl_me.grid(row=r, column=2, padx=8, pady=3, sticky="w")
-        self._row_widgets.extend([lbl_dt, lbl_ty, lbl_me])
-
-    def _validate_dates(self) -> tuple[bool, str]:
-        s, e = self.start_var.get().strip(), self.end_var.get().strip()
+    # ====== 日付パース ======
+    def _parse_date(self, s: str | None) -> str | None:
+        if not s:
+            return None
         try:
-            ds = datetime.strptime(s, "%Y-%m-%d")
-            de = datetime.strptime(e, "%Y-%m-%d")
+            datetime.strptime(s, "%Y-%m-%d")
+            return s
         except ValueError:
-            return False, "日付は YYYY-MM-DD 形式で入力してください。"
-        if ds > de:
-            return False, "開始日が終了日より後になっています。"
-        return True, ""
+            return None
 
-    # ===== 検索 =====
-    def _search(self):
-        self._clear_rows()
-        code = self._get_selected_code()
+    def _current_range(self) -> tuple[str, str]:
+        s = self._parse_date(self.start_var.get())
+        e = self._parse_date(self.end_var.get())
+        if not s and not e:
+            today = date.today().strftime("%Y-%m-%d")
+            return today, today
+        if s and not e:
+            return s, s
+        if e and not s:
+            return e, e
+        return s or e, e or s
+
+    # ====== アクション ======
+    def search(self):
+        start, end = self._current_range()
+        code = self._emp_code_selected()
         if not code:
-            self.summary.configure(text="従業員が未選択です。従業員を登録して選択してください。")
-            return
-        ok, msg = self._validate_dates()
-        if not ok:
-            messagebox.showwarning("日付エラー", msg)
+            messagebox.showwarning("従業員", "従業員を選択してください。")
             return
 
-        rows = self.att_repo.list_records(
-            start_date=self.start_var.get(),
-            end_date=self.end_var.get(),
-            employee_code=code
-        )
-        # rows は {id, employee_code, type, ts, note? ...} を想定
-        cnt = {k: 0 for k in TYPES_ORDER}
+        rows = self.svc.calc_daily_summary(start, end, emp_repo=self.emp_repo, employee_code=code)
+
+        # クリア
+        for iid in self.tree.get_children():
+            self.tree.delete(iid)
+
+        # 反映 + 合計
+        tot_w, tot_b = 0, 0
         for r in rows:
-            ts = r.get("ts") or r.get("timestamp") or ""
-            typ = r.get("type") or r.get("att_type") or ""
-            memo = r.get("note") or ""
-            # 表示
-            self._add_row(ts, typ, memo)
-            # 集計
-            if typ in cnt:
-                cnt[typ] += 1
+            wmin = r["work_minutes"]; bmin = r["break_minutes"]
+            tot_w += wmin; tot_b += bmin
+            self.tree.insert(
+                "", "end",
+                values=(r["date"], r["code"], r["name"], wmin, f"{wmin/60:.2f}", bmin, f"{bmin/60:.2f}")
+            )
 
-        # サマリ表示
-        total = len(rows)
-        parts = [f"{k}:{cnt[k]}件" for k in TYPES_ORDER if k in cnt]
-        self.summary.configure(
-            text=f"表示件数: {total}  |  " + "  /  ".join(parts) if rows else "該当データはありません。"
-        )
+        self.sum_work_var.set(f"実働合計: {tot_w/60:.2f} h")
+        self.sum_break_var.set(f"休憩合計: {tot_b/60:.2f} h")
 
-    # ===== CSV保存 =====
-    def _export_csv(self):
-        code = self._get_selected_code()
-        if not code:
-            messagebox.showwarning("CSV", "従業員を選択してください。")
+    def quick_today(self):
+        today = date.today().strftime("%Y-%m-%d")
+        self.start_var.set(today)
+        self.end_var.set(today)
+        self.search()
+
+    def quick_month(self):
+        today = date.today()
+        start = date(today.year, today.month, 1).strftime("%Y-%m-%d")
+        end   = today.strftime("%Y-%m-%d")
+        self.start_var.set(start)
+        self.end_var.set(end)
+        self.search()
+
+    def quick_year(self):
+        today = date.today()
+        start = date(today.year, 1, 1).strftime("%Y-%m-%d")
+        end   = today.strftime("%Y-%m-%d")
+        self.start_var.set(start)
+        self.end_var.set(end)
+        self.search()
+
+    # ====== CSV ======
+    def export_csv(self):
+        if not self.tree.get_children():
+            messagebox.showinfo("CSV", "出力するデータがありません。")
             return
-        ok, msg = self._validate_dates()
-        if not ok:
-            messagebox.showwarning("CSV", msg)
-            return
-
-        rows = self.att_repo.list_records(
-            start_date=self.start_var.get(),
-            end_date=self.end_var.get(),
-            employee_code=code
-        )
-        if not rows:
-            messagebox.showinfo("CSV", "出力対象のデータがありません。")
-            return
-
-        # 保存ダイアログ
-        fpath = filedialog.asksaveasfilename(
+        start, end = self._current_range()
+        path = filedialog.asksaveasfilename(
+            title="CSVに保存",
             defaultextension=".csv",
-            filetypes=[("CSV ファイル", "*.csv")],
-            initialfile=f"my_attendance_{code}_{self.start_var.get()}_{self.end_var.get()}.csv"
+            filetypes=[("CSV Files", "*.csv")],
+            initialfile=f"my_daily_summary_{start.replace('-','')}_{end.replace('-','')}.csv"
         )
-        if not fpath:
+        if not path:
             return
-
-        # 書き出し（既知列＋不明列も落とさない方針）
-        known = ["id", "employee_code", "type", "ts", "note"]
-        extra = []
-        for r in rows:
-            for k in r.keys():
-                if k not in known and k not in extra:
-                    extra.append(k)
-        headers = [*known, *extra]
 
         try:
-            with open(fpath, "w", newline="", encoding="utf-8-sig") as f:
+            with open(path, "w", encoding="utf-8-sig", newline="") as f:
                 w = csv.writer(f)
-                w.writerow(headers)
-                for r in rows:
-                    w.writerow([r.get(h, "") for h in headers])
-            messagebox.showinfo("CSV", "CSVを書き出しました。")
+                w.writerow(["日付", "コード", "氏名", "実働(分)", "実働(時間)", "休憩(分)", "休憩(時間)"])
+                for iid in self.tree.get_children():
+                    w.writerow(self.tree.item(iid)["values"])
+            messagebox.showinfo("CSV", f"保存しました：\n{path}")
         except Exception as e:
-            messagebox.showerror("CSV", f"書き出しに失敗しました。\n{e}")
+            messagebox.showerror("CSV", f"保存に失敗しました：{e}")

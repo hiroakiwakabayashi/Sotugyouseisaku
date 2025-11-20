@@ -151,3 +151,82 @@ class AttendanceService:
 
         out.sort(key=lambda x: x["amount"], reverse=True)
         return out
+    
+        # ==== 日別の実働/休憩 集計 ====
+    def calc_daily_summary(
+        self,
+        start_date: str,
+        end_date: str,
+        emp_repo: "EmployeeRepo",
+        employee_code: str | None = None,
+    ):
+        """
+        指定期間の「日別・従業員別」の実働分 / 休憩分を集計して返す。
+        戻り値: list[ {date, code, name, work_minutes, break_minutes} ] （日付昇順→コード昇順）
+        ※MVP: 日またぎシフトは未対応（同日内でのIN→OUTを想定）
+        """
+        logs = self.repo.iter_logs(start_date, end_date, employee_code=employee_code)
+
+        from collections import defaultdict
+        # key: (code, 'YYYY-MM-DD')
+        work_sum = defaultdict(int)
+        break_sum = defaultdict(int)
+
+        current_in: dict[str, datetime] = {}
+        break_start: dict[str, datetime] = {}
+        break_stack_min = defaultdict(int)
+
+        def _to_dt(s: str) -> datetime:
+            s = s.replace(" ", "T")
+            return datetime.fromisoformat(s)
+
+        for r in logs:
+            code = r["employee_code"]
+            t    = r["type"]              # ← iter_logs が 'punch_type AS type' で返す想定
+            ts   = _to_dt(r["ts"])
+            day_key = (code, ts.date().isoformat())
+
+            if t == "CLOCK_IN":
+                current_in[code] = ts
+                break_stack_min[code] = 0
+                break_start.pop(code, None)
+
+            elif t == "BREAK_START":
+                if code in current_in and code not in break_start:
+                    break_start[code] = ts
+
+            elif t == "BREAK_END":
+                if code in current_in and code in break_start:
+                    bmin = int((ts - break_start[code]).total_seconds() // 60)
+                    if bmin > 0:
+                        break_stack_min[code] += bmin
+                    break_start.pop(code, None)
+
+            elif t == "CLOCK_OUT":
+                if code in current_in:
+                    total = int((ts - current_in[code]).total_seconds() // 60)
+                    bmin = break_stack_min[code]
+                    work = max(0, total - bmin)
+                    work_sum[day_key]  += work
+                    break_sum[day_key] += bmin
+                # クローズ
+                current_in.pop(code, None)
+                break_stack_min[code] = 0
+                break_start.pop(code, None)
+
+        # 従業員名マップ
+        name_map = {e["code"]: e.get("name", "") for e in emp_repo.list_all()}
+
+        out = []
+        for (code, d), wmin in work_sum.items():
+            out.append({
+                "date": d,
+                "code": code,
+                "name": name_map.get(code, ""),
+                "work_minutes": wmin,
+                "break_minutes": break_sum.get((code, d), 0),
+            })
+
+        out.sort(key=lambda x: (x["date"], x["code"]))
+        return out
+

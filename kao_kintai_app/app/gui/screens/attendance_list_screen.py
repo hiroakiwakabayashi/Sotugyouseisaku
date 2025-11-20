@@ -145,6 +145,13 @@ class AttendanceListScreen(ctk.CTkFrame):
             .grid(row=0, column=8, padx=4, pady=6)
         ctk.CTkButton(filt, text="今年", width=BTN_W, height=BTN_H, command=self.quick_year)\
             .grid(row=0, column=9, padx=4, pady=6)
+        
+        ctk.CTkButton(filt, text="給与(今月)", width=BTN_W, height=BTN_H,
+                    command=self.payroll_this_month)\
+            .grid(row=0, column=10, padx=4, pady=6)
+        ctk.CTkButton(filt, text="給与(表示月)", width=BTN_W, height=BTN_H,
+                    command=self.payroll_from_filters)\
+            .grid(row=0, column=11, padx=4, pady=6)
 
         meta = ctk.CTkFrame(self)
         meta.grid(row=3, column=0, sticky="ew", padx=16, pady=(4, 12))
@@ -340,3 +347,116 @@ class AttendanceListScreen(ctk.CTkFrame):
             "BREAK_END": "休憩終了",
             "CLOCK_OUT": "退勤",
         }.get(punch_type, punch_type)
+
+    # ==== 給与ダイアログ呼び出し ====
+    def payroll_this_month(self):
+        """今日の年月で月次給与を表示"""
+        today = date.today()
+        self._show_monthly_payroll(today.year, today.month)
+
+    def payroll_from_filters(self):
+        """
+        フィルタで選んでいる開始日から年月を推定して表示。
+        未指定なら今日の年月。
+        """
+        if self.start_var.get():
+            try:
+                dt = datetime.strptime(self.start_var.get(), "%Y-%m-%d")
+                y, m = dt.year, dt.month
+            except Exception:
+                y, m = date.today().year, date.today().month
+        else:
+            y, m = date.today().year, date.today().month
+        self._show_monthly_payroll(y, m)
+
+    def _show_monthly_payroll(self, year: int, month: int):
+        """
+        月次給与を計算してポップアップ表示
+        """
+        svc = AttendanceService(self.att_repo)  # ← AttendanceService(calc付き) を使う
+        results = svc.calc_monthly_payroll(year, month,
+                                           emp_repo=self.emp_repo,
+                                           employee_code=None)
+
+        # 画面
+        win = ctk.CTkToplevel(self)
+        win.title(f"月次給与 {year}-{month:02d}")
+        win.geometry("780x520")
+        win.grid_rowconfigure(2, weight=1)
+        win.grid_columnconfigure(0, weight=1)
+
+        # ヘッダ
+        head = ctk.CTkFrame(win, height=46)
+        head.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 4))
+        head.grid_propagate(False)
+        ctk.CTkLabel(head, text=f"🧾 月次給与 {year}-{month:02d}",
+                     font=("Meiryo UI", 18, "bold")).pack(side="left", padx=8)
+
+        def _export():
+            if not results:
+                messagebox.showinfo("CSV", "出力するデータがありません。")
+                return
+            path = filedialog.asksaveasfilename(
+                title="CSVに保存", defaultextension=".csv",
+                filetypes=[("CSV Files", "*.csv")],
+                initialfile=f"payroll_{year}{month:02d}.csv"
+            )
+            if not path: return
+            import csv
+            with open(path, "w", encoding="utf-8-sig", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(["コード", "氏名", "実働(分)", "実働(時間)", "時給", "支給額"])
+                for r in results:
+                    hours = r["total_minutes"] / 60.0
+                    w.writerow([r["code"], r["name"], r["total_minutes"],
+                                f"{hours:.2f}", r["hourly_wage"], r["amount"]])
+            messagebox.showinfo("CSV", f"保存しました：\n{path}")
+
+        ctk.CTkButton(head, text="CSV出力", command=_export, width=100).pack(side="right", padx=8)
+
+        # 表
+        wrap = ctk.CTkFrame(win)
+        wrap.grid(row=2, column=0, sticky="nsew", padx=8, pady=(0, 8))
+        wrap.grid_rowconfigure(0, weight=1)
+        wrap.grid_columnconfigure(0, weight=1)
+
+        tree = ttk.Treeview(
+            wrap,
+            columns=("code", "name", "mins", "hours", "wage", "amount"),
+            show="headings",
+            height=16
+        )
+        tree.heading("code",   text="コード")
+        tree.heading("name",   text="氏名")
+        tree.heading("mins",   text="実働(分)")
+        tree.heading("hours",  text="実働(時間)")
+        tree.heading("wage",   text="時給")
+        tree.heading("amount", text="支給額")
+
+        tree.column("code",   width=120, anchor="center")
+        tree.column("name",   width=160, anchor="w")
+        tree.column("mins",   width=110, anchor="e")
+        tree.column("hours",  width=120, anchor="e")
+        tree.column("wage",   width=90,  anchor="e")
+        tree.column("amount", width=120, anchor="e")
+        tree.grid(row=0, column=0, sticky="nsew")
+
+        yscroll = ttk.Scrollbar(wrap, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=yscroll.set)
+        yscroll.grid(row=0, column=1, sticky="ns")
+
+        # データ投入
+        total = 0
+        for r in results:
+            hours = r["total_minutes"] / 60.0
+            total += r["amount"]
+            tree.insert("", "end",
+                        values=(r["code"], r["name"], r["total_minutes"],
+                                f"{hours:.2f}", int(r["hourly_wage"]), int(r["amount"])))
+
+        # 合計
+        foot = ctk.CTkFrame(win, height=34)
+        foot.grid(row=3, column=0, sticky="ew", padx=8, pady=(0, 8))
+        foot.grid_propagate(False)
+        ctk.CTkLabel(foot, text=f"合計支給額：{total:,} 円",
+                     font=("Meiryo UI", 14, "bold")).pack(side="right", padx=10)
