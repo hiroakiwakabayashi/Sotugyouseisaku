@@ -520,21 +520,22 @@ def run_app(cfg: dict):
     root = ctk.CTk()
     root.title(cfg.get("app_name", "Kao-Kintai"))
 
-    # フルスクリーン（PCごとに共通レイアウトを保ちつつ全画面表示）
-    if os.name == "nt":
-        # Windows はズーム（最大化）状態
-        root.state("zoomed")
-    else:
-        # mac / Linux は画面サイズいっぱいに
-        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        root.geometry(f"{sw}x{sh}+0+0")
-
     # レイアウト
     root.grid_rowconfigure(0, weight=1)
     root.grid_columnconfigure(0, weight=1)
 
     shell = AppShell(master=root, cfg=cfg)
     shell.grid(row=0, column=0, sticky="nsew")
+
+    def _maximize_window():
+        if os.name == "nt":
+            root.state("zoomed")  # Windowsなら最大化
+        else:
+            sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+            root.geometry(f"{sw}x{sh}+0+0")  # 他OSは画面サイズに合わせる
+
+    root.after(100, _maximize_window)
+
 
     # 履歴ナビ用ショートカット
     root.bind("<Control-Left>", lambda e: shell._hist(-1))
