@@ -28,21 +28,32 @@ class AppShell(ctk.CTkFrame):
         self.att_repo = AttendanceRepo()
         self.search_popup: tk.Toplevel | None = None
 
-        # レイアウト（左ナビ:右メイン = 1:4 の比率で伸縮）
+        # ===== レイアウト =====
+        # 左ナビは幅固定（weight=0）、右側だけ伸縮（weight=1）
         self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=1, minsize=220)  # 最低 220px は確保
-        self.grid_columnconfigure(1, weight=4)
+        self.grid_columnconfigure(0, weight=0)
+        self.grid_columnconfigure(1, weight=1)
 
         # ===== 左ナビ =====
-        # ※ width / grid_propagate(False) を外して、グリッド比率で伸縮させる
-        self.nav = ctk.CTkFrame(self)
-        self.nav.grid(row=0, column=0, sticky="nsew")
+        # 幅 220px 固定・子ウィジェットでサイズが変わらないよう grid_propagate(False)
+        self.nav = ctk.CTkFrame(self, width=220)
+        self.nav.grid(row=0, column=0, sticky="nsw")
+        self.nav.grid_propagate(False)
 
         ctk.CTkLabel(
             self.nav,
             text=cfg.get("app_name", "Kao-Kintai"),
             font=("Meiryo UI", 18, "bold"),
         ).pack(padx=16, pady=(16, 8), anchor="w")
+
+        # 左ナビボタンの統一スタイル
+        nav_btn_kwargs = dict(
+            width=170,
+            height=34,
+            corner_radius=8,
+            anchor="center",
+            font=("Meiryo UI", 14),
+        )
 
         for text, key in [
             ("🏠 ホーム", "home"),
@@ -53,9 +64,13 @@ class AppShell(ctk.CTkFrame):
             ("🛠 管理者", "admin"),
         ]:
             ctk.CTkButton(
-                self.nav, text=text, command=lambda k=key: self.show(k)
-            ).pack(padx=16, pady=6, fill="x")
+                self.nav,
+                text=text,
+                command=lambda k=key: self.show(k),
+                **nav_btn_kwargs,
+            ).pack(padx=16, pady=5)
 
+        # 管理者用サブナビ
         self.subnav = ctk.CTkFrame(self.nav, fg_color="transparent")
         self.subnav.pack(padx=8, pady=(8, 12), fill="x", anchor="n")
 
@@ -346,12 +361,22 @@ class AppShell(ctk.CTkFrame):
 
         role = (self.current_admin or {}).get("role", "admin")
 
+        # 左ナビとほぼ同じボタンスタイルに統一
+        admin_btn_style = dict(
+            width=170,
+            height=34,
+            corner_radius=8,
+            anchor="center",
+            font=("Meiryo UI", 13),
+        )
+
         from .screens.attendance_list_screen import AttendanceListScreen
         ctk.CTkButton(
             self.subnav,
             text="📑 勤怠一覧 / 検索",
             command=lambda: self._swap_right(AttendanceListScreen),
-        ).pack(padx=8, pady=4, fill="x")
+            **admin_btn_style,
+        ).pack(padx=8, pady=4)
 
         if role != "su":
             from .screens.face_data_screen import FaceDataScreen
@@ -359,7 +384,8 @@ class AppShell(ctk.CTkFrame):
                 self.subnav,
                 text="🖼 顔データ管理",
                 command=lambda: self._swap_right(FaceDataScreen),
-            ).pack(padx=8, pady=4, fill="x")
+                **admin_btn_style,
+            ).pack(padx=8, pady=4)
             return
 
         from .screens.employee_register_screen import EmployeeRegisterScreen
@@ -377,12 +403,14 @@ class AppShell(ctk.CTkFrame):
             self.subnav,
             text="👥 従業員登録 / 編集",
             command=lambda: self._swap_right(EmployeeRegisterScreen),
-        ).pack(padx=8, pady=4, fill="x")
+            **admin_btn_style,
+        ).pack(padx=8, pady=4)
         ctk.CTkButton(
             self.subnav,
             text="🎥 カメラ・顔認証設定",
             command=lambda: self._swap_right(CameraSettingsScreen),
-        ).pack(padx=8, pady=4, fill="x")
+            **admin_btn_style,
+        ).pack(padx=8, pady=4)
         ctk.CTkButton(
             self.subnav,
             text="🔐 管理者アカウント",
@@ -391,22 +419,27 @@ class AppShell(ctk.CTkFrame):
                     parent, self.current_admin
                 )
             ),
-        ).pack(padx=8, pady=4, fill="x")
+            **admin_btn_style,
+        ).pack(padx=8, pady=4)
         ctk.CTkButton(
             self.subnav,
             text="🖼 顔データ管理",
             command=lambda: self._swap_right(FaceDataScreen),
-        ).pack(padx=8, pady=4, fill="x")
+            **admin_btn_style,
+        ).pack(padx=8, pady=4)
         ctk.CTkButton(
             self.subnav,
             text="🗓 シフト作成 / 編集",
             command=lambda: self._swap_right(ShiftEditorScreen),
-        ).pack(padx=8, pady=4, fill="x")
+            **admin_btn_style,
+        ).pack(padx=8, pady=4)
         ctk.CTkButton(
             self.subnav,
-            text="📊 従業員一覧（時給）[su]",
+            text="📊 従業員一覧（時給）",
             command=lambda: self._swap_right(EmployeeSuOverviewScreen),
-        ).pack(padx=8, pady=4, fill="x")
+            **admin_btn_style,
+        ).pack(padx=8, pady=4)
+
 
     def _swap_right(self, widget_class_or_factory):
         for child in self.body.winfo_children():
