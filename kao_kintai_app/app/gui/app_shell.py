@@ -142,6 +142,12 @@ class AppShell(ctk.CTkFrame):
         # 画面どこかクリックでサジェストを閉じる
         root = self.winfo_toplevel()
         root.bind("<Button-1>", self._on_root_click, add="+")
+        # ▼【サジェスト用】ウィンドウ移動・リサイズ・最小化時の処理
+        #   - 位置を追従させる
+        #   - 最小化されたらサジェストを閉じる
+        root.bind("<Configure>", self._on_root_configure, add="+")
+        # ウィンドウが最小化（タスクバーにしまわれる）されたときにサジェストを閉じる
+        root.bind("<Unmap>", self._on_root_unmap, add="+")
 
         self.show("home")
 
@@ -210,21 +216,15 @@ class AppShell(ctk.CTkFrame):
             self._destroy_search_popup()
             return
 
-        # --- 幅・高さ・位置を決定 ---
-        width = max(self.search_container.winfo_width(), 380)
-        height = 260  # 固定高さ（中身はスクロール）
-
-        x = self.search_container.winfo_rootx()
-        y = self.search_container.winfo_rooty() + self.search_container.winfo_height()
-
         # --- Toplevel 準備 ---
         if self.search_popup is None or not tk.Toplevel.winfo_exists(self.search_popup):
             self.search_popup = tk.Toplevel(self)
             self.search_popup.overrideredirect(True)
             self.search_popup.attributes("-topmost", True)
 
-        self.search_popup.geometry(f"{width}x{height}+{x}+{y}")
-        self.search_popup.lift()
+        # ▼位置だけを別メソッドで更新
+        self._update_search_popup_position()
+
         # フォーカスは常に検索欄に
         self.search_entry.focus_set()
 
@@ -298,6 +298,42 @@ class AppShell(ctk.CTkFrame):
             btn.pack(fill="x", padx=8, pady=2)
 
         self.search_popup.update_idletasks()
+
+    def _update_search_popup_position(self):
+        # 検索ボックスの位置に合わせてサジェストポップアップを動かす #
+        if self.search_popup is None or not tk.Toplevel.winfo_exists(self.search_popup):
+            return
+
+        # 検索ボックス直下の位置に追従させる
+        width = max(self.search_container.winfo_width(), 380)
+        height = 260  # _update_search_popup と同じ高さ
+
+        x = self.search_container.winfo_rootx()
+        y = self.search_container.winfo_rooty() + self.search_container.winfo_height()
+
+        self.search_popup.geometry(f"{width}x{height}+{x}+{y}")
+        self.search_popup.lift()
+
+    def _on_root_configure(self, event: tk.Event):
+        """ウィンドウのサイズ変更・移動・最小化時の共通処理"""
+        root = self.winfo_toplevel()
+
+        # 最小化（iconic）や最大化以外の状態も含め、
+        # 「通常状態 (normal) 以外」になったらサジェストは閉じる。
+        state = root.state()
+        if state != "normal":
+            self._destroy_search_popup()
+            return
+
+        # 通常状態なら位置だけ追従させる
+        self._update_search_popup_position()
+
+    def _on_root_unmap(self, event: tk.Event):
+        """ウィンドウが最小化されたときに呼ばれる（<Unmap>）"""
+        # ルートウィンドウがタスクバーにしまわれたタイミングで、
+        # 画面上にサジェストだけ取り残されないよう必ず破棄する。
+        self._destroy_search_popup()
+
 
     def _destroy_search_popup(self):
         if self.search_popup and tk.Toplevel.winfo_exists(self.search_popup):
