@@ -40,6 +40,15 @@ class AdminLoginScreen(ctk.CTkFrame):
         self.id_error.pack(pady=(0, 5), padx=60, fill="x")
         self.id_entry.bind("<Return>", lambda e: self.pw_entry.focus_set())
 
+        # ▼【一時対応】画面を開いたときにユーザID入力欄を自動で選択状態にする
+        #   - 完成後に元の挙動へ戻したい場合：
+        #     → 下の self.after(...) の1行を削除すれば元の状態に戻る。
+        #   - after(100, ...) にしている理由：
+        #     → ウィジェット描画より前に focus_set() を呼ぶと無視されるため、
+        #        100ミリ秒後にフォーカスを当てている。
+        self.after(100, lambda: self.id_entry.focus_set())
+
+
         # ===== パスワード =====
         ctk.CTkLabel(login_panel, text="パスワード", anchor="w", text_color="#333333")\
             .pack(pady=(15, 2), padx=60, fill="x")
