@@ -10,8 +10,12 @@ class EmployeeRegisterScreen(ctk.CTkFrame):
         super().__init__(master)
         self.repo = EmployeeRepo()
 
-        # レイアウト
-        self.grid_rowconfigure(1, weight=1)
+        # レイアウト：下段の表が一番伸びるようにする
+        # 0: タイトル / 1: フォーム / 2: ボタン / 3: 表
+        self.grid_rowconfigure(0, weight=0)
+        self.grid_rowconfigure(1, weight=0)
+        self.grid_rowconfigure(2, weight=0)
+        self.grid_rowconfigure(3, weight=1)  # ★ 表を伸ばす
         self.grid_columnconfigure(0, weight=1)
 
         # タイトル
@@ -24,7 +28,9 @@ class EmployeeRegisterScreen(ctk.CTkFrame):
         # 上段：フォーム
         form = ctk.CTkFrame(self)
         form.grid(row=1, column=0, sticky="ew", padx=16)
-        form.grid_columnconfigure(3, weight=0)
+        for col in range(4):
+            form.grid_columnconfigure(col, weight=0)
+        form.grid_columnconfigure(3, weight=1)
 
         ctk.CTkLabel(form, text="社員コード").grid(
             row=0, column=0, padx=8, pady=6, sticky="e"
@@ -47,7 +53,7 @@ class EmployeeRegisterScreen(ctk.CTkFrame):
             textvariable=self.name_var,
             width=260,
             placeholder_text="例）山田 太郎",
-        ).grid(row=0, column=3, padx=8, pady=6, sticky="w")
+        ).grid(row=0, column=3, padx=8, pady=6, sticky="we")
 
         ctk.CTkLabel(form, text="ロール").grid(
             row=1, column=0, padx=8, pady=6, sticky="e"
@@ -67,9 +73,9 @@ class EmployeeRegisterScreen(ctk.CTkFrame):
             variable=self.active_var,
         ).grid(row=1, column=3, padx=8, pady=6, sticky="w")
 
-        # ボタン列
+        # ボタン列（上との余白少なめ、下の表との余白も少なめ）
         btns = ctk.CTkFrame(self)
-        btns.grid(row=2, column=0, sticky="ew", padx=16, pady=(4, 8))
+        btns.grid(row=2, column=0, sticky="ew", padx=16, pady=(4, 2))
         for i in range(5):
             btns.grid_columnconfigure(i, weight=1)
 
@@ -103,9 +109,15 @@ class EmployeeRegisterScreen(ctk.CTkFrame):
             command=self.refresh_table,
         ).grid(row=0, column=4, padx=6, pady=6, sticky="ew")
 
-        # 下段：一覧（Treeview）
+        # 下段：一覧（Treeview） – 余白を減らし、画面いっぱいに広げる
         table_wrap = ctk.CTkFrame(self)
-        table_wrap.grid(row=3, column=0, sticky="nsew", padx=16, pady=(4, 16))
+        table_wrap.grid(
+            row=3,
+            column=0,
+            sticky="nsew",
+            padx=16,
+            pady=(0, 16),  # ボタンとの間の余白を最小限に
+        )
         table_wrap.grid_rowconfigure(0, weight=1)
         table_wrap.grid_columnconfigure(0, weight=1)
 
@@ -120,11 +132,12 @@ class EmployeeRegisterScreen(ctk.CTkFrame):
         self.tree.heading("active", text="有効")
         self.tree.heading("created_at", text="作成日時")
 
-        self.tree.column("code", width=120)
-        self.tree.column("name", width=180)
-        self.tree.column("role", width=90)
-        self.tree.column("active", width=60)
-        self.tree.column("created_at", width=160)
+        # 列がウィンドウ幅に追従して伸びるようにする
+        self.tree.column("code", width=120, stretch=True, anchor="w")
+        self.tree.column("name", width=180, stretch=True, anchor="w")
+        self.tree.column("role", width=90, stretch=True, anchor="center")
+        self.tree.column("active", width=60, stretch=False, anchor="center")
+        self.tree.column("created_at", width=160, stretch=True, anchor="center")
 
         self.tree.grid(row=0, column=0, sticky="nsew")
 
