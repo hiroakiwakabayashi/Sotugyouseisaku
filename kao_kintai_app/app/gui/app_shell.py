@@ -676,16 +676,26 @@ class AppShell(ctk.CTkFrame):
             self._is_history_nav = False
 
     def show(self, key: str):
+        # 画面本体をいったんクリア
         for child in self.body.winfo_children():
             child.destroy()
         self._clear_subnav()
 
+        # ▼ 管理者画面以外へ遷移する場合は、管理者ログイン状態を解除する
+        #   - 左メニューから「ホーム」「勤怠一覧」などに直接移動したとき
+        #   - 右上プロフィールメニューも未ログイン状態にする
+        if key != "admin":
+            self.current_admin = None
+            self._destroy_profile_menu()
+
+        # 履歴管理
         if not self._is_history_nav:
             if self.hist_idx < len(self.history) - 1:
                 self.history = self.history[: self.hist_idx + 1]
             self.history.append(key)
             self.hist_idx = len(self.history) - 1
 
+        # 画面切り替え
         if key == "admin":
             def to_menu(user):
                 self.current_admin = user
@@ -694,11 +704,9 @@ class AppShell(ctk.CTkFrame):
                     from .screens.employee_register_screen import (
                         EmployeeRegisterScreen,
                     )
-
                     self._swap_right(EmployeeRegisterScreen)
                 else:
                     from .screens.face_data_screen import FaceDataScreen
-
                     self._swap_right(FaceDataScreen)
 
             screen = AdminLoginScreen(
@@ -719,7 +727,6 @@ class AppShell(ctk.CTkFrame):
 
         screen.grid(row=0, column=0, sticky="nsew")
         self.current_screen = screen
-
 
 def run_app(cfg: dict):
     # ===== テーマ & スケールを固定 =====
