@@ -24,7 +24,7 @@ class EmployeeRegisterScreen(ctk.CTkFrame):
         # 上段：フォーム
         form = ctk.CTkFrame(self)
         form.grid(row=1, column=0, sticky="ew", padx=16)
-        form.grid_columnconfigure(3, weight=1)
+        form.grid_columnconfigure(3, weight=0)
 
         ctk.CTkLabel(form, text="社員コード").grid(
             row=0, column=0, padx=8, pady=6, sticky="e"

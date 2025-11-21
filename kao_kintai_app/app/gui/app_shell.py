@@ -28,27 +28,43 @@ class AppShell(ctk.CTkFrame):
         self.att_repo = AttendanceRepo()
         self.search_popup: tk.Toplevel | None = None
 
-        # ===== レイアウト =====
-        # 左ナビは幅固定（weight=0）、右側だけ伸縮（weight=1）
+# ===== 左右レイアウト =====
+        # 0列: 左ナビ (固定幅 NAV_WIDTH)
+        # 1列: 仕切り線 (1pxの薄い灰色)
+        # 2列: 右側メイン (残り全部)
+        NAV_WIDTH = 220  # ★ここが「起動時の見た目」に合わせる基準値（px）
+        self.NAV_WIDTH = NAV_WIDTH
+
+        # 行方向は 0 行目だけ使う
         self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=0)
-        self.grid_columnconfigure(1, weight=1)
 
-        # ===== 左ナビ =====
-        # 幅 220px 固定・子ウィジェットでサイズが変わらないよう grid_propagate(False)
-        self.nav = ctk.CTkFrame(self, width=220)
+        # 列方向の比率を固定
+        #   - col=0: 左メニュー列 → 幅 NAV_WIDTH で完全固定
+        #   - col=1: 仕切り線 → 幅 1px で完全固定
+        #   - col=2: 右側メイン → 残り全部
+        self.grid_columnconfigure(0, weight=0, minsize=NAV_WIDTH)
+        self.grid_columnconfigure(1, weight=0, minsize=1)
+        self.grid_columnconfigure(2, weight=1)
+
+        # === 左ナビ ===
+        self.nav = ctk.CTkFrame(self, width=NAV_WIDTH)
         self.nav.grid(row=0, column=0, sticky="nsw")
+        # 子ウィジェットのサイズに引っ張られて幅が変わらないように完全固定
+        # pack を使っているので pack_propagate(False) も必ず呼ぶ
         self.nav.grid_propagate(False)
+        self.nav.pack_propagate(False)
 
-        ctk.CTkLabel(
-            self.nav,
-            text=cfg.get("app_name", "Kao-Kintai"),
-            font=("Meiryo UI", 18, "bold"),
-        ).pack(padx=16, pady=(16, 8), anchor="w")
+        # 左メニューと右画面の境界に薄い灰色の縦線を入れる
+        self.nav_separator = ctk.CTkFrame(
+            self,
+            width=1,
+            fg_color="#D1D5DB",  # 薄いグレー
+        )
+        self.nav_separator.grid(row=0, column=1, sticky="ns")
 
-        # 左ナビボタンの統一スタイル
+        # 左ナビボタンの統一スタイル（NAV_WIDTH に合わせた幅）
         nav_btn_kwargs = dict(
-            width=170,
+            width=self.NAV_WIDTH - 50,  # 左右の余白(16px×2)などを差し引いた安全な幅
             height=34,
             corner_radius=8,
             anchor="center",
@@ -74,10 +90,12 @@ class AppShell(ctk.CTkFrame):
         self.subnav = ctk.CTkFrame(self.nav, fg_color="transparent")
         self.subnav.pack(padx=8, pady=(8, 12), fill="x", anchor="n")
 
-        # ===== 右側メイン =====
+        # === 右側メイン ===
         self.right = ctk.CTkFrame(self)
-        self.right.grid(row=0, column=1, sticky="nsew")
-        self.right.grid_rowconfigure(1, weight=1)
+        # 仕切り線の右側（column=2）に配置（右側は常に残り全部）
+        self.right.grid(row=0, column=2, sticky="nsew")
+        self.right.grid_rowconfigure(0, weight=0)   # ヘッダー行
+        self.right.grid_rowconfigure(1, weight=1)   # body 行
         self.right.grid_columnconfigure(0, weight=1)
 
         # --- ヘッダー ---
@@ -572,9 +590,9 @@ class AppShell(ctk.CTkFrame):
 
         role = (self.current_admin or {}).get("role", "admin")
 
-        # 左ナビとほぼ同じボタンスタイルに統一
+        # 左ナビと同じ幅のボタンスタイルに統一
         admin_btn_style = dict(
-            width=170,
+            width=self.NAV_WIDTH - 50,
             height=34,
             corner_radius=8,
             anchor="center",
