@@ -2,6 +2,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 from app.infra.db.admin_repo import AdminRepo
 
+
 class AdminAccountRegisterScreen(ctk.CTkFrame):
     """管理者アカウント 登録画面
        - ロール選択（admin/su）
@@ -14,48 +15,89 @@ class AdminAccountRegisterScreen(ctk.CTkFrame):
         self.current_admin = current_admin or {}
         self.is_su = (self.current_admin.get("role") == "su")
 
-        self.grid_columnconfigure(0, weight=1)
-        card = ctk.CTkFrame(self, corner_radius=14)
-        card.grid(row=0, column=0, padx=16, pady=16, sticky="n")
-        for r in range(10):
-            card.grid_rowconfigure(r, weight=0)
-        card.grid_columnconfigure(1, weight=1)
+        # 背景色をログイン画面と合わせる
+        self.configure(fg_color="#f5f5f5")
 
+        # ===== 中央の登録パネル =====
+        panel = ctk.CTkFrame(
+            self,
+            corner_radius=20,
+            fg_color="white",
+            width=850,
+            height=550,
+        )
+        panel.place(relx=0.5, rely=0.5, anchor="center")  # 画面中央に固定配置
+        panel.grid_propagate(False)  # 中身でサイズが変わらないよう固定
+
+        # ===== タイトル =====
         ctk.CTkLabel(
-            card, text="🔐 管理者アカウント登録",
-            font=("Meiryo UI", 20, "bold")
-        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(16, 6))
+            panel,
+            text="管理者アカウント登録",
+            font=("Meiryo UI", 28, "bold"),
+            text_color="#333333",
+        ).pack(pady=(40, 20))
+
+        # ===== フォーム部（グリッド） =====
+        form = ctk.CTkFrame(panel, fg_color="transparent")
+        form.pack(fill="x", padx=60, pady=(0, 10))
+        form.grid_columnconfigure(0, weight=0)
+        form.grid_columnconfigure(1, weight=1)
 
         # 入力フィールド
-        self.username = ctk.CTkEntry(card, placeholder_text="例: admin02")
-        self.display  = ctk.CTkEntry(card, placeholder_text="表示名（例: 山田 太郎）")
-        self.pw1      = ctk.CTkEntry(card, placeholder_text="パスワード", show="•")
-        self.pw2      = ctk.CTkEntry(card, placeholder_text="パスワード（確認）", show="•")
+        self.username = ctk.CTkEntry(form, placeholder_text="例: admin02")
+        self.display = ctk.CTkEntry(form, placeholder_text="表示名（例: 山田 太郎）")
+        self.pw1 = ctk.CTkEntry(form, placeholder_text="パスワード", show="•")
+        self.pw2 = ctk.CTkEntry(form, placeholder_text="パスワード（確認）", show="•")
 
         # ロール選択（su ログイン時のみ su を選べる）
         role_values = ["admin", "su"] if self.is_su else ["admin"]
         self.role_var = ctk.StringVar(value=role_values[0])
-        self.role_sel = ctk.CTkOptionMenu(card, values=role_values, variable=self.role_var)
+        self.role_sel = ctk.CTkOptionMenu(form, values=role_values, variable=self.role_var)
 
-        self._row(card, 1, "ユーザーID", self.username)
-        self._row(card, 2, "表示名",     self.display)
-        self._row(card, 3, "パスワード", self.pw1)
-        self._row(card, 4, "パスワード(確認)", self.pw2)
-        self._row(card, 5, "権限ロール", self.role_sel)
+        # 行ごとにラベル＋入力欄を配置
+        self._row(form, 0, "ユーザーID", self.username)
+        self._row(form, 1, "表示名", self.display)
+        self._row(form, 2, "パスワード", self.pw1)
+        self._row(form, 3, "パスワード(確認)", self.pw2)
+        self._row(form, 4, "権限ロール", self.role_sel)
 
-        self.btn = ctk.CTkButton(card, text="登録する", command=self._save)
-        self.btn.grid(row=6, column=0, columnspan=2, sticky="ew", padx=14, pady=(8, 14))
+        # ===== 登録ボタン =====
+        btn_frame = ctk.CTkFrame(panel, fg_color="transparent")
+        btn_frame.pack(pady=(10, 10))
+        self.btn = ctk.CTkButton(
+            btn_frame,
+            text="登録する",
+            width=200,
+            height=40,
+            fg_color="#0d6efd",
+            hover_color="#0b5ed7",
+            command=self._save,
+        )
+        self.btn.grid(row=0, column=0, padx=4, pady=4)
 
+        # ===== 注意書き =====
         tip = "※ su は全権限を持つ特権アカウントです。必要最小限の作成に留めてください。"
         if not self.is_su:
             tip += "（現在のログイン権限では su を作成できません）"
-        ctk.CTkLabel(card, text=tip, text_color="#666")\
-            .grid(row=7, column=0, columnspan=2, sticky="w", padx=14, pady=(0, 12))
+        ctk.CTkLabel(
+            panel,
+            text=tip,
+            text_color="#666666",
+            font=("Meiryo UI", 11),
+            wraplength=750,
+            justify="left",
+        ).pack(pady=(0, 12), padx=40, anchor="w")
 
-    def _row(self, parent, r, label, widget):
-        ctk.CTkLabel(parent, text=label, width=120, anchor="w")\
-            .grid(row=r, column=0, sticky="w", padx=14, pady=6)
-        widget.grid(row=r, column=1, sticky="ew", padx=(0,14), pady=6)
+    def _row(self, parent, r: int, label: str, widget: ctk.CTkBaseClass):
+        """ラベル + 入力欄 を1行分配置（ログイン画面風パディングに揃える）"""
+        ctk.CTkLabel(
+            parent,
+            text=label,
+            width=120,
+            anchor="w",
+            text_color="#333333",
+        ).grid(row=r, column=0, sticky="w", padx=(0, 12), pady=6)
+        widget.grid(row=r, column=1, sticky="ew", pady=6)
 
     def _save(self):
         u = self.username.get().strip()
@@ -92,10 +134,16 @@ class AdminAccountRegisterScreen(ctk.CTkFrame):
             return
 
         # 登録
-        self.repo.create(username=u, display_name=d, password_plain=p1, role=role, is_active=True)
+        self.repo.create(
+            username=u,
+            display_name=d,
+            password_plain=p1,
+            role=role,
+            is_active=True,
+        )
         messagebox.showinfo("登録完了", f"管理者 '{u}'（ロール: {role}）を登録しました。")
 
-        # クリア
+        # 入力クリア
         for e in (self.username, self.display, self.pw1, self.pw2):
             e.delete(0, "end")
         # su でなければ admin 固定に戻す
