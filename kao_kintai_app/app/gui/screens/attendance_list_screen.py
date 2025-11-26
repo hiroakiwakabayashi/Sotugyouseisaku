@@ -71,10 +71,12 @@ class DatePickerEntry(ctk.CTkFrame):
         btns = ctk.CTkFrame(self.popup)
         btns.pack(fill="x", padx=8, pady=(0, 8))
 
-        ctk.CTkButton(btns, text="確定", width=CAL_BTN_W, height=CAL_BTN_H, command=self._ok)\
-            .pack(side="left", padx=(30, 8), pady=4)
-        ctk.CTkButton(btns, text="キャンセル", width=CAL_BTN_W, height=CAL_BTN_H, command=self._cancel)\
-            .pack(side="right", padx=(8, 30), pady=4)
+        ctk.CTkButton(
+            btns, text="確定", width=CAL_BTN_W, height=CAL_BTN_H, command=self._ok
+        ).pack(side="left", padx=(30, 8), pady=4)
+        ctk.CTkButton(
+            btns, text="キャンセル", width=CAL_BTN_W, height=CAL_BTN_H, command=self._cancel
+        ).pack(side="right", padx=(8, 30), pady=4)
 
         self.popup.focus_force()
         self.popup.bind("<FocusOut>", lambda e: self._cancel())
@@ -111,54 +113,95 @@ class AttendanceListScreen(ctk.CTkFrame):
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(self, text="📑 勤怠一覧 / 検索", font=("Meiryo UI", 22, "bold")).grid(
-            row=0, column=0, sticky="w", padx=16, pady=(16, 8)
-        )
+        ctk.CTkLabel(
+            self,
+            text="📑 勤怠一覧 / 検索",
+            font=("Meiryo UI", 22, "bold")
+        ).grid(row=0, column=0, sticky="w", padx=16, pady=(16, 8))
 
+        # =========================================================
+        # フィルタエリア（2段構成、全体を均等配置）
+        # =========================================================
         filt = ctk.CTkFrame(self)
         filt.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 8))
-        for i in range(12):
-            filt.grid_columnconfigure(i, weight=0)
-        filt.grid_columnconfigure(11, weight=1)
+        filt.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(filt, text="開始日").grid(row=0, column=0, padx=(8, 4), pady=6, sticky="e")
-        DatePickerEntry(filt, textvariable=self.start_var, width=130).grid(
-            row=0, column=1, padx=(0, 12), pady=6, sticky="w"
+        BTN_H = 32  # ボタン高さ（全ボタン共通）
+
+        # ---------- 1段目：開始日 / 終了日 / 従業員 / 検索 ----------
+        row1 = ctk.CTkFrame(filt, fg_color="transparent")
+        row1.grid(row=0, column=0, sticky="ew")
+        for c in range(4):
+            row1.grid_columnconfigure(c, weight=1)
+
+        # 開始日グループ
+        start_box = ctk.CTkFrame(row1, fg_color="transparent")
+        start_box.grid(row=0, column=0, sticky="w", padx=4, pady=4)
+        ctk.CTkLabel(start_box, text="開始日").pack(side="left", padx=(0, 4))
+        DatePickerEntry(start_box, textvariable=self.start_var, width=130).pack(
+            side="left"
         )
 
-        ctk.CTkLabel(filt, text="終了日").grid(row=0, column=2, padx=(8, 4), pady=6, sticky="e")
-        DatePickerEntry(filt, textvariable=self.end_var, width=130).grid(
-            row=0, column=3, padx=(0, 12), pady=6, sticky="w"
+        # 終了日グループ
+        end_box = ctk.CTkFrame(row1, fg_color="transparent")
+        end_box.grid(row=0, column=1, sticky="w", padx=4, pady=4)
+        ctk.CTkLabel(end_box, text="終了日").pack(side="left", padx=(0, 4))
+        DatePickerEntry(end_box, textvariable=self.end_var, width=130).pack(
+            side="left"
         )
 
-        ctk.CTkLabel(filt, text="従業員").grid(row=0, column=4, padx=(8, 4), pady=6, sticky="e")
-        ctk.CTkOptionMenu(filt, values=self._employee_options(), variable=self.emp_var, width=220).grid(
-            row=0, column=5, padx=(0, 12), pady=6, sticky="w"
-        )
+        # 従業員グループ
+        emp_box = ctk.CTkFrame(row1, fg_color="transparent")
+        emp_box.grid(row=0, column=2, sticky="w", padx=4, pady=4)
+        ctk.CTkLabel(emp_box, text="従業員").pack(side="left", padx=(0, 4))
+        ctk.CTkOptionMenu(
+            emp_box,
+            values=self._employee_options(),
+            variable=self.emp_var,
+            width=220,
+        ).pack(side="left")
 
-        BTN_W, BTN_H = 120, 36
-        ctk.CTkButton(filt, text="検索", width=BTN_W, height=BTN_H, command=self.search)\
-            .grid(row=0, column=6, padx=4, pady=6)
-        ctk.CTkButton(filt, text="今日", width=BTN_W, height=BTN_H, command=self.quick_today)\
-            .grid(row=0, column=7, padx=4, pady=6)
-        ctk.CTkButton(filt, text="今月", width=BTN_W, height=BTN_H, command=self.quick_month)\
-            .grid(row=0, column=8, padx=4, pady=6)
-        ctk.CTkButton(filt, text="今年", width=BTN_W, height=BTN_H, command=self.quick_year)\
-            .grid(row=0, column=9, padx=4, pady=6)
-        
-        ctk.CTkButton(filt, text="給与(今月)", width=BTN_W, height=BTN_H,
-                    command=self.payroll_this_month)\
-            .grid(row=0, column=10, padx=4, pady=6)
-        ctk.CTkButton(filt, text="給与(表示月)", width=BTN_W, height=BTN_H,
-                    command=self.payroll_from_filters)\
-            .grid(row=0, column=11, padx=4, pady=6)
+        # 検索ボタン（右端いっぱい）
+        ctk.CTkButton(
+            row1,
+            text="検索",
+            height=BTN_H,
+            command=self.search,
+        ).grid(row=0, column=3, padx=4, pady=4, sticky="ew")
 
+        # ---------- 2段目：クイックボタン列（均等5分割） ----------
+        row2 = ctk.CTkFrame(filt, fg_color="transparent")
+        row2.grid(row=1, column=0, sticky="ew")
+        for c in range(5):
+            row2.grid_columnconfigure(c, weight=1)
+
+        quick_buttons = [
+            ("今日", self.quick_today),
+            ("今月", self.quick_month),
+            ("今年", self.quick_year),
+            ("給与(今月)", self.payroll_this_month),
+            ("給与(表示月)", self.payroll_from_filters),
+        ]
+        for col, (label, cmd) in enumerate(quick_buttons):
+            ctk.CTkButton(
+                row2,
+                text=label,
+                height=BTN_H,
+                command=cmd,
+            ).grid(row=0, column=col, padx=4, pady=(2, 4), sticky="ew")
+
+        # ---------------- 件数 + CSV ----------------
         meta = ctk.CTkFrame(self)
         meta.grid(row=3, column=0, sticky="ew", padx=16, pady=(4, 12))
         meta.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(meta, textvariable=self.count_var, font=("Meiryo UI", 14)).pack(side="left", padx=6)
-        ctk.CTkButton(meta, text="CSVエクスポート", command=self.export_csv).pack(side="right", padx=4)
+        ctk.CTkLabel(
+            meta, textvariable=self.count_var, font=("Meiryo UI", 14)
+        ).pack(side="left", padx=6)
+        ctk.CTkButton(meta, text="CSVエクスポート", command=self.export_csv).pack(
+            side="right", padx=4
+        )
 
+        # ---------------- 一覧（Treeview） ----------------
         style = ttk.Style()
         try:
             style.theme_use("clam")
@@ -196,10 +239,10 @@ class AttendanceListScreen(ctk.CTkFrame):
         self.tree.heading("ts", text="日時")
         self.tree.heading("type", text="区分")
 
-        self.tree.column("id",   width=70,  anchor="center")
+        self.tree.column("id", width=70, anchor="center")
         self.tree.column("code", width=130, anchor="center")
         self.tree.column("name", width=180, anchor="center")
-        self.tree.column("ts",   width=220, anchor="center")
+        self.tree.column("ts", width=220, anchor="center")
         self.tree.column("type", width=110, anchor="center")
 
         self.tree.grid(row=0, column=0, sticky="nsew")
@@ -209,7 +252,7 @@ class AttendanceListScreen(ctk.CTkFrame):
         yscroll.grid(row=0, column=1, sticky="ns")
 
         self.tree.tag_configure("even", background="#FFFFFF")
-        self.tree.tag_configure("odd",  background="#F9FAFB")
+        self.tree.tag_configure("odd", background="#F9FAFB")
 
         self.quick_today()
 
@@ -250,7 +293,9 @@ class AttendanceListScreen(ctk.CTkFrame):
             return
 
         code = self._emp_code_selected()
-        rows = self.att_repo.list_records(start_date=start, end_date=end, employee_code=code)
+        rows = self.att_repo.list_records(
+            start_date=start, end_date=end, employee_code=code
+        )
 
         # 🔍 氏名 / コードの部分一致フィルタ
         if self.keyword:
@@ -270,10 +315,14 @@ class AttendanceListScreen(ctk.CTkFrame):
             raw_ts = r["ts"]
             ts_str = raw_ts
             try:
-                ts_str = datetime.strptime(raw_ts, "%Y-%m-%dT%H:%M:%S.%f").strftime("%Y/%m/%d %H:%M")
+                ts_str = datetime.strptime(
+                    raw_ts, "%Y-%m-%dT%H:%M:%S.%f"
+                ).strftime("%Y/%m/%d %H:%M")
             except Exception:
                 try:
-                    ts_str = datetime.strptime(raw_ts, "%Y-%m-%dT%H:%M:%S").strftime("%Y/%m/%d %H:%M")
+                    ts_str = datetime.strptime(
+                        raw_ts, "%Y-%m-%dT%H:%M:%S"
+                    ).strftime("%Y/%m/%d %H:%M")
                 except Exception:
                     ts_str = raw_ts.replace("T", " ")
 
@@ -323,7 +372,7 @@ class AttendanceListScreen(ctk.CTkFrame):
             title="CSVに保存",
             defaultextension=".csv",
             filetypes=[("CSV Files", "*.csv")],
-            initialfile=f"attendance_{date.today().strftime('%Y%m%d')}.csv"
+            initialfile=f"attendance_{date.today().strftime('%Y%m%d')}.csv",
         )
         if not path:
             return
@@ -373,10 +422,10 @@ class AttendanceListScreen(ctk.CTkFrame):
         """
         月次給与を計算してポップアップ表示
         """
-        svc = AttendanceService(self.att_repo)  # ← AttendanceService(calc付き) を使う
-        results = svc.calc_monthly_payroll(year, month,
-                                           emp_repo=self.emp_repo,
-                                           employee_code=None)
+        svc = AttendanceService(self.att_repo)
+        results = svc.calc_monthly_payroll(
+            year, month, emp_repo=self.emp_repo, employee_code=None
+        )
 
         # 画面
         win = ctk.CTkToplevel(self)
@@ -389,30 +438,44 @@ class AttendanceListScreen(ctk.CTkFrame):
         head = ctk.CTkFrame(win, height=46)
         head.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 4))
         head.grid_propagate(False)
-        ctk.CTkLabel(head, text=f"🧾 月次給与 {year}-{month:02d}",
-                     font=("Meiryo UI", 18, "bold")).pack(side="left", padx=8)
+        ctk.CTkLabel(
+            head,
+            text=f"🧾 月次給与 {year}-{month:02d}",
+            font=("Meiryo UI", 18, "bold"),
+        ).pack(side="left", padx=8)
 
         def _export():
             if not results:
                 messagebox.showinfo("CSV", "出力するデータがありません。")
                 return
             path = filedialog.asksaveasfilename(
-                title="CSVに保存", defaultextension=".csv",
+                title="CSVに保存",
+                defaultextension=".csv",
                 filetypes=[("CSV Files", "*.csv")],
-                initialfile=f"payroll_{year}{month:02d}.csv"
+                initialfile=f"payroll_{year}{month:02d}.csv",
             )
-            if not path: return
-            import csv
+            if not path:
+                return
             with open(path, "w", encoding="utf-8-sig", newline="") as f:
                 w = csv.writer(f)
                 w.writerow(["コード", "氏名", "実働(分)", "実働(時間)", "時給", "支給額"])
                 for r in results:
                     hours = r["total_minutes"] / 60.0
-                    w.writerow([r["code"], r["name"], r["total_minutes"],
-                                f"{hours:.2f}", r["hourly_wage"], r["amount"]])
+                    w.writerow(
+                        [
+                            r["code"],
+                            r["name"],
+                            r["total_minutes"],
+                            f"{hours:.2f}",
+                            r["hourly_wage"],
+                            r["amount"],
+                        ]
+                    )
             messagebox.showinfo("CSV", f"保存しました：\n{path}")
 
-        ctk.CTkButton(head, text="CSV出力", command=_export, width=100).pack(side="right", padx=8)
+        ctk.CTkButton(head, text="CSV出力", command=_export, width=100).pack(
+            side="right", padx=8
+        )
 
         # 表
         wrap = ctk.CTkFrame(win)
@@ -424,20 +487,20 @@ class AttendanceListScreen(ctk.CTkFrame):
             wrap,
             columns=("code", "name", "mins", "hours", "wage", "amount"),
             show="headings",
-            height=16
+            height=16,
         )
-        tree.heading("code",   text="コード")
-        tree.heading("name",   text="氏名")
-        tree.heading("mins",   text="実働(分)")
-        tree.heading("hours",  text="実働(時間)")
-        tree.heading("wage",   text="時給")
+        tree.heading("code", text="コード")
+        tree.heading("name", text="氏名")
+        tree.heading("mins", text="実働(分)")
+        tree.heading("hours", text="実働(時間)")
+        tree.heading("wage", text="時給")
         tree.heading("amount", text="支給額")
 
-        tree.column("code",   width=120, anchor="center")
-        tree.column("name",   width=160, anchor="w")
-        tree.column("mins",   width=110, anchor="e")
-        tree.column("hours",  width=120, anchor="e")
-        tree.column("wage",   width=90,  anchor="e")
+        tree.column("code", width=120, anchor="center")
+        tree.column("name", width=160, anchor="w")
+        tree.column("mins", width=110, anchor="e")
+        tree.column("hours", width=120, anchor="e")
+        tree.column("wage", width=90, anchor="e")
         tree.column("amount", width=120, anchor="e")
         tree.grid(row=0, column=0, sticky="nsew")
 
@@ -450,13 +513,25 @@ class AttendanceListScreen(ctk.CTkFrame):
         for r in results:
             hours = r["total_minutes"] / 60.0
             total += r["amount"]
-            tree.insert("", "end",
-                        values=(r["code"], r["name"], r["total_minutes"],
-                                f"{hours:.2f}", int(r["hourly_wage"]), int(r["amount"])))
+            tree.insert(
+                "",
+                "end",
+                values=(
+                    r["code"],
+                    r["name"],
+                    r["total_minutes"],
+                    f"{hours:.2f}",
+                    int(r["hourly_wage"]),
+                    int(r["amount"]),
+                ),
+            )
 
         # 合計
         foot = ctk.CTkFrame(win, height=34)
         foot.grid(row=3, column=0, sticky="ew", padx=8, pady=(0, 8))
         foot.grid_propagate(False)
-        ctk.CTkLabel(foot, text=f"合計支給額：{total:,} 円",
-                     font=("Meiryo UI", 14, "bold")).pack(side="right", padx=10)
+        ctk.CTkLabel(
+            foot,
+            text=f"合計支給額：{total:,} 円",
+            font=("Meiryo UI", 14, "bold"),
+        ).pack(side="right", padx=10)
