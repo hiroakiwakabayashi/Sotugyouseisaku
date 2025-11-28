@@ -10,6 +10,7 @@ from .screens.my_attendance_screen import MyAttendanceScreen
 from .screens.admin_login_screen import AdminLoginScreen
 from .screens.shift_view_screen import ShiftViewScreen
 
+
 from app.infra.db.attendance_repo import AttendanceRepo
 
 
@@ -74,7 +75,7 @@ class AppShell(ctk.CTkFrame):
         for text, key in [
             ("🏠 ホーム", "home"),
             ("📷 顔認証 打刻", "face"),
-            ("📑 勤怠一覧", "list"),
+            ("📑シフト提出", "list"),
             ("🗓 シフト", "shift"),
             ("👤 マイ勤怠", "my"),
             ("🛠 管理者", "admin"),
@@ -190,7 +191,7 @@ class AppShell(ctk.CTkFrame):
         kw = self.search_var.get().strip()
         if not kw:
             return
-        self.show("list")
+        self.show("my")
         if isinstance(self.current_screen, AttendanceListScreen):
             self.current_screen.on_search(kw)
         self._destroy_search_popup()
@@ -735,7 +736,8 @@ class AppShell(ctk.CTkFrame):
         elif key == "face":
             screen = FaceClockScreen(self.body)
         elif key == "list":
-            screen = AttendanceListScreen(self.body)
+            from .screens.shift_submit_screen import ShiftSubmitScreen
+            screen = ShiftSubmitScreen(self.body)
         elif key == "my":
             screen = MyAttendanceScreen(self.body)
         elif key == "shift":
