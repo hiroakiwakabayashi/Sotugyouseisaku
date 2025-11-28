@@ -14,12 +14,18 @@ from .screens.shift_view_screen import ShiftViewScreen
 
 from app.infra.db.attendance_repo import AttendanceRepo
 
+# ★ 開発中だけ True にする。本番運用するときは必ず False に戻すこと。
+DEV_SKIP_ADMIN_LOGIN = True
 
 class AppShell(ctk.CTkFrame):
     def __init__(self, master, cfg: dict):
         super().__init__(master)
         self.cfg = cfg
 
+        # ★ 開発モードフラグ（ファイル上部で DEV_SKIP_ADMIN_LOGIN を定義しておく）
+        self.dev_skip_admin_login = DEV_SKIP_ADMIN_LOGIN
+
+        # 状態管理
         self.current_admin = None
         self.history: list[str] = []
         self.hist_idx: int = -1
@@ -50,7 +56,7 @@ class AppShell(ctk.CTkFrame):
             background="#E5E7EB",
             foreground="#111111",
         )
-
+            
 # ===== 左右レイアウト =====
         # ===== 左右レイアウト =====
         # 0列: 左ナビ (固定幅 NAV_WIDTH)
@@ -104,6 +110,15 @@ class AppShell(ctk.CTkFrame):
         # 管理者用サブナビ
         self.subnav = ctk.CTkFrame(self.nav, fg_color="transparent")
         self.subnav.pack(padx=8, pady=(8, 12), fill="x", anchor="n")
+
+# ★ 開発モードのときは、起動時から SU 管理者としてサブナビを表示
+        if self.dev_skip_admin_login and not self.current_admin:
+            self.current_admin = {
+                "username": "dev_admin",
+                "name": "開発用管理者",
+                "role": "su",
+            }
+            self._build_admin_subnav()
 
         # 左メニューと右画面の境界線
         self.nav_separator = ctk.CTkFrame(
@@ -186,7 +201,9 @@ class AppShell(ctk.CTkFrame):
         root.bind("<Unmap>", self._on_root_unmap, add="+")
         root.bind("<FocusOut>", self._on_root_focus_out, add="+")
 
-        self.show("home")
+    # ★ 開発モードのときは起動直後から管理者画面を表示
+        initial_key = "admin" if self.dev_skip_admin_login else "home"
+        self.show(initial_key)
 
     def _on_root_focus_out(self, event: tk.Event):
         self._destroy_search_popup()
@@ -634,47 +651,85 @@ class AppShell(ctk.CTkFrame):
             self._is_history_nav = False
 
     def show(self, key: str):
+        # 画面本体をいったんクリア
         for child in self.body.winfo_children():
             child.destroy()
-        self._clear_subnav()
 
-        if key != "admin":
-            self.current_admin = None
-            self._destroy_profile_menu()
+        # --- 管理者状態の扱い ---------------------------------
+        if self.dev_skip_admin_login:
+            # 開発モード：管理者ログイン状態とサブナビは維持する
+            if self.current_admin is None:
+                # 念のため、未設定なら dev 管理者で埋める
+                self.current_admin = {
+                    "username": "dev_admin",
+                    "name": "開発用管理者",
+                    "role": "su",
+                }
+                self._build_admin_subnav()
+        else:
+            # 本番モード：admin 以外に遷移したときはログアウト扱い
+            self._clear_subnav()
+            if key != "admin":
+                self.current_admin = None
+                self._destroy_profile_menu()
 
+        # --- 履歴管理（元のまま） ---------------------------
         if not self._is_history_nav:
             if self.hist_idx < len(self.history) - 1:
                 self.history = self.history[: self.hist_idx + 1]
             self.history.append(key)
             self.hist_idx = len(self.history) - 1
 
+        # --- 画面切り替え -------------------------------------
         if key == "admin":
-            def to_menu(user):
-                self.current_admin = user
-                self._build_admin_subnav()
-                if user.get("role") == "su":
-                    from .screens.employee_register_screen import (
-                        EmployeeRegisterScreen,
-                    )
-                    self._swap_right(EmployeeRegisterScreen)
-                else:
-                    from .screens.face_data_screen import FaceDataScreen
-                    self._swap_right(FaceDataScreen)
+            if self.dev_skip_admin_login:
+                # ★ 開発モード：常に管理者トップ（従業員登録）へ
+                if self.current_admin is None:
+                    self.current_admin = {
+                        "username": "dev_admin",
+                        "name": "開発用管理者",
+                        "role": "su",
+                    }
+                    self._build_admin_subnav()
 
-            screen = AdminLoginScreen(
-                self.body, switch_to_menu_callback=to_menu
-            )
+                from .screens.employee_register_screen import EmployeeRegisterScreen
+                screen = EmployeeRegisterScreen(self.body)
+
+            else:
+                # ★ 本番モード：ログイン画面から入る
+                def to_menu(user):
+                    self.current_admin = user
+                    self._build_admin_subnav()
+                    if user.get("role") == "su":
+                        from .screens.employee_register_screen import (
+                            EmployeeRegisterScreen,
+                        )
+                        self._swap_right(EmployeeRegisterScreen)
+                    else:
+                        from .screens.face_data_screen import FaceDataScreen
+                        self._swap_right(FaceDataScreen)
+
+                screen = AdminLoginScreen(
+                    self.body,
+                    switch_to_menu_callback=to_menu,
+                )
+
         elif key == "home":
             screen = HomeScreen(self.body)
+
         elif key == "face":
             screen = FaceClockScreen(self.body)
+
         elif key == "list":
-            from .screens.shift_submit_screen import ShiftSubmitScreen
-            screen = ShiftSubmitScreen(self.body)
+            # 📑 ボタンで「勤怠一覧」を開きたい前提に戻しています
+            screen = AttendanceListScreen(self.body)
+
         elif key == "my":
             screen = MyAttendanceScreen(self.body)
+
         elif key == "shift":
             screen = ShiftViewScreen(self.body)
+
         else:
             screen = HomeScreen(self.body)
 
