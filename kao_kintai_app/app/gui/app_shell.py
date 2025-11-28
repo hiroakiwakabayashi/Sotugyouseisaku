@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import os
 import tkinter as tk
+from tkinter import ttk 
 from datetime import datetime
 
 from .screens.home_screen import HomeScreen
@@ -27,6 +28,27 @@ class AppShell(ctk.CTkFrame):
         # 検索サジェスト
         self.att_repo = AttendanceRepo()
         self.search_popup: tk.Toplevel | None = None
+
+        # ===== Treeview 共通スタイル（勤怠一覧と同じデザイン）=====
+        style = ttk.Style()
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+        style.configure(
+            "Treeview",
+            font=("Meiryo UI", 14),
+            rowheight=36,
+            background="#FFFFFF",
+            foreground="#222222",
+            fieldbackground="#FFFFFF",
+        )
+        style.configure(
+            "Treeview.Heading",
+            font=("Meiryo UI", 15, "bold"),
+            background="#E5E7EB",
+            foreground="#111111",
+        )
 
 # ===== 左右レイアウト =====
         # 0列: 左ナビ (固定幅 NAV_WIDTH)

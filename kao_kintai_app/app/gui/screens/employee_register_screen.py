@@ -133,8 +133,8 @@ class EmployeeRegisterScreen(ctk.CTkFrame):
         self.tree.heading("created_at", text="作成日時")
 
         # 列がウィンドウ幅に追従して伸びるようにする
-        self.tree.column("code", width=120, stretch=True, anchor="w")
-        self.tree.column("name", width=180, stretch=True, anchor="w")
+        self.tree.column("code", width=120, stretch=True, anchor="center")
+        self.tree.column("name", width=180, stretch=True, anchor="center")
         self.tree.column("role", width=90, stretch=True, anchor="center")
         self.tree.column("active", width=60, stretch=False, anchor="center")
         self.tree.column("created_at", width=160, stretch=True, anchor="center")
