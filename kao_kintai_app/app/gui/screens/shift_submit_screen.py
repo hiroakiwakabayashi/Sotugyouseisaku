@@ -52,49 +52,47 @@ class ShiftSubmitScreen(ctk.CTkFrame):
         if emp_opts:
             self.emp_var.set(emp_opts[0])
 
-        # UI 枠
-        self.grid_rowconfigure(3, weight=1)
+        # レイアウト
+        self.grid_rowconfigure(2, weight=1)  # ← rows を row=2 に
         self.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(self, text="🗓 シフト提出（週次 / 第1・第2希望対応）",
-                     font=("Meiryo UI", 20, "bold")).grid(row=0, column=0, sticky="w", padx=16, pady=(16, 6))
+        ctk.CTkLabel(
+            self,
+            text="🗓 シフト提出（週次 / 第1・第2希望対応）",
+            font=("Meiryo UI", 20, "bold"),
+        ).grid(row=0, column=0, sticky="w", padx=16, pady=(16, 6))
 
         # ツールバー（従業員・週移動）
         bar = ctk.CTkFrame(self)
         bar.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 8))
         bar.grid_columnconfigure(4, weight=1)
 
-        ctk.CTkLabel(bar, text="従業員").grid(row=0, column=0, padx=(8, 4), pady=6, sticky="e")
-        self.emp_menu = ctk.CTkOptionMenu(bar, variable=self.emp_var, values=emp_opts, width=250)
+        ctk.CTkLabel(bar, text="従業員").grid(
+            row=0, column=0, padx=(8, 4), pady=6, sticky="e"
+        )
+        self.emp_menu = ctk.CTkOptionMenu(
+            bar, variable=self.emp_var, values=emp_opts, width=250
+        )
         self.emp_menu.grid(row=0, column=1, padx=(0, 12), pady=6, sticky="w")
 
-        prev_btn = ctk.CTkButton(bar, text="◀ 前の週", command=lambda: self._move_week(-7), width=110, height=34)
-        next_btn = ctk.CTkButton(bar, text="次の週 ▶", command=lambda: self._move_week(+7), width=110, height=34)
+        prev_btn = ctk.CTkButton(
+            bar, text="◀ 前の週", command=lambda: self._move_week(-7), width=110, height=34
+        )
+        next_btn = ctk.CTkButton(
+            bar, text="次の週 ▶", command=lambda: self._move_week(+7), width=110, height=34
+        )
         self.week_label = ctk.CTkLabel(bar, text="", font=("Meiryo UI", 14, "bold"))
 
         prev_btn.grid(row=0, column=2, padx=6, pady=6)
         next_btn.grid(row=0, column=3, padx=6, pady=6)
         self.week_label.grid(row=0, column=4, padx=6, pady=6, sticky="w")
 
-        # テーブルヘッダー
-        header = ctk.CTkFrame(self)
-        header.grid(row=2, column=0, sticky="ew", padx=16)
-        header.grid_columnconfigure(0, weight=0, minsize=120)  # 日付
-        header.grid_columnconfigure(1, weight=0, minsize=120)  # 第1 IN
-        header.grid_columnconfigure(2, weight=0, minsize=120)  # 第1 OUT
-        header.grid_columnconfigure(3, weight=0, minsize=120)  # 第2 IN
-        header.grid_columnconfigure(4, weight=0, minsize=120)  # 第2 OUT
-        header.grid_columnconfigure(5, weight=1)               # メモ
-
-        for col, text in enumerate(["日付", "第1希望 IN", "第1希望 OUT", "第2希望 IN", "第2希望 OUT", "メモ"]):
-            ctk.CTkLabel(header, text=text, font=("Meiryo UI", 13, "bold")).grid(
-                row=0, column=col, padx=6, pady=(6, 6), sticky="w"
-            )
-
-        # 行コンテナ（スクロール）
+        # ===== 行コンテナ（ヘッダ＋7日分） =====
         self.rows = ctk.CTkScrollableFrame(self, corner_radius=10)
-        self.rows.grid(row=3, column=0, sticky="nsew", padx=16, pady=(4, 8))
-        self.rows.grid_columnconfigure(0, weight=0, minsize=120)
+        self.rows.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 8))
+
+        # 0:日付, 1:第1IN, 2:第1OUT, 3:第2IN, 4:第2OUT, 5:メモ
+        self.rows.grid_columnconfigure(0, weight=0, minsize=150)
         self.rows.grid_columnconfigure(1, weight=0, minsize=120)
         self.rows.grid_columnconfigure(2, weight=0, minsize=120)
         self.rows.grid_columnconfigure(3, weight=0, minsize=120)
@@ -103,10 +101,16 @@ class ShiftSubmitScreen(ctk.CTkFrame):
 
         # 操作用ボタン
         foot = ctk.CTkFrame(self)
-        foot.grid(row=4, column=0, sticky="ew", padx=16, pady=(0, 16))
+        foot.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 16))
         foot.grid_columnconfigure(0, weight=1)
-        ctk.CTkButton(foot, text="この週を保存", command=self._save_week, height=40, fg_color="#0d6efd",
-                      hover_color="#0b5ed7").pack(side="right", padx=6)
+        ctk.CTkButton(
+            foot,
+            text="この週を保存",
+            command=self._save_week,
+            height=40,
+            fg_color="#0d6efd",
+            hover_color="#0b5ed7",
+        ).pack(side="right", padx=6)
 
         # 週表示・行構築
         self._build_week_rows()
@@ -141,44 +145,54 @@ class ShiftSubmitScreen(ctk.CTkFrame):
         # 週ラベル更新
         self.week_label.configure(text=self._week_label_text())
 
-        # 行エディット用保持: {date: {...widgets}}
-        self._editors = {}
+        # ==== ヘッダ行（row=0）====
+        header_titles = ["日付", "第1希望 IN", "第1希望 OUT", "第2希望 IN", "第2希望 OUT", "メモ"]
+        for col, text in enumerate(header_titles):
+            ctk.CTkLabel(
+                self.rows,
+                text=text,
+                font=("Meiryo UI", 13, "bold"),
+                text_color="#4B5563",
+            ).grid(row=0, column=col, padx=6, pady=(6, 4), sticky="w")
 
-        # 7日分作成
+        # 行エディット用保持: {date_str: {...widgets}}
+        self._editors: dict[str, dict[str, ctk.CTkEntry]] = {}
+
+        # 7日分作成（row=1〜7）
         for i in range(7):
             d = self.week_start + timedelta(days=i)
-            self._add_day_row(d)
+            self._add_day_row(d, row_index=i + 1)
 
-        # 既存データを反映（同日の複数コマ→第1/第2へ割り当て）
+        # 既存データを反映
         self._fill_from_db()
 
-    def _add_day_row(self, day: date):
-        r = self._editors[day.strftime("%Y-%m-%d")] = {}
-
-        # カード風（薄枠）
-        card = ctk.CTkFrame(self.rows, corner_radius=10, border_width=1, border_color="#E5E7EB")
-        card.grid(sticky="ew", padx=6, pady=5)
-        for c in range(6):
-            card.grid_columnconfigure(c, weight=0)
-        card.grid_columnconfigure(5, weight=1)
+    def _add_day_row(self, day: date, row_index: int):
+        dstr = day.strftime("%Y-%m-%d")
+        editors = {}
+        self._editors[dstr] = editors
 
         # 日付ラベル
-        ctk.CTkLabel(card, text=day.strftime("%Y-%m-%d (%a)"), font=("Meiryo UI", 13, "bold")).grid(
-            row=0, column=0, padx=10, pady=8, sticky="w"
-        )
+        ctk.CTkLabel(
+            self.rows,
+            text=day.strftime("%Y-%m-%d (%a)"),
+            font=("Meiryo UI", 13, "bold"),
+            text_color="#111827",
+        ).grid(row=row_index, column=0, padx=6, pady=4, sticky="w")
 
         # エントリ生成ヘルパ
-        def _mk_entry(col):
-            e = ctk.CTkEntry(card, placeholder_text="HH:MM", width=110)
-            e.grid(row=0, column=col, padx=6, pady=6, sticky="w")
+        def _mk_entry(col: int, placeholder: str = "HH:MM", width: int = 110):
+            e = ctk.CTkEntry(self.rows, placeholder_text=placeholder, width=width)
+            e.grid(row=row_index, column=col, padx=6, pady=4, sticky="w")
             return e
 
-        r["in1"] = _mk_entry(1)
-        r["out1"] = _mk_entry(2)
-        r["in2"] = _mk_entry(3)
-        r["out2"] = _mk_entry(4)
-        r["note"] = ctk.CTkEntry(card, placeholder_text="メモ（任意）", width=260)
-        r["note"].grid(row=0, column=5, padx=6, pady=6, sticky="ew")
+        editors["in1"] = _mk_entry(1)
+        editors["out1"] = _mk_entry(2)
+        editors["in2"] = _mk_entry(3)
+        editors["out2"] = _mk_entry(4)
+        editors["note"] = ctk.CTkEntry(
+            self.rows, placeholder_text="メモ（任意）", width=260
+        )
+        editors["note"].grid(row=row_index, column=5, padx=6, pady=4, sticky="ew")
 
     def _fill_from_db(self):
         code = self._selected_code()
@@ -186,7 +200,9 @@ class ShiftSubmitScreen(ctk.CTkFrame):
             return
         s = self.week_start
         e = s + timedelta(days=6)
-        rows = self.shift_repo.list_by_range(s.strftime("%Y-%m-%d"), e.strftime("%Y-%m-%d"), employee_code=code)
+        rows = self.shift_repo.list_by_range(
+            s.strftime("%Y-%m-%d"), e.strftime("%Y-%m-%d"), employee_code=code
+        )
 
         # 同日のレコードを時間順にして第1/第2へ割り振る
         by_day: dict[str, list[dict]] = {}
@@ -202,13 +218,18 @@ class ShiftSubmitScreen(ctk.CTkFrame):
             if not ed:
                 continue
             if len(lst) >= 1:
-                ed["in1"].delete(0, tk.END);  ed["in1"].insert(0, lst[0]["start_time"])
-                ed["out1"].delete(0, tk.END); ed["out1"].insert(0, lst[0]["end_time"])
+                ed["in1"].delete(0, tk.END)
+                ed["in1"].insert(0, lst[0]["start_time"])
+                ed["out1"].delete(0, tk.END)
+                ed["out1"].insert(0, lst[0]["end_time"])
                 if lst[0].get("note"):
+                    ed["note"].delete(0, tk.END)
                     ed["note"].insert(0, lst[0]["note"])
             if len(lst) >= 2:
-                ed["in2"].delete(0, tk.END);  ed["in2"].insert(0, lst[1]["start_time"])
-                ed["out2"].delete(0, tk.END); ed["out2"].insert(0, lst[1]["end_time"])
+                ed["in2"].delete(0, tk.END)
+                ed["in2"].insert(0, lst[1]["start_time"])
+                ed["out2"].delete(0, tk.END)
+                ed["out2"].insert(0, lst[1]["end_time"])
 
     # ---------------- 保存 ----------------
     def _save_week(self):
@@ -230,23 +251,32 @@ class ShiftSubmitScreen(ctk.CTkFrame):
             # 第1希望（両方埋まっているときだけ登録対象）
             if in1 or out1:
                 if not (_is_hhmm(in1) and _is_hhmm(out1) and _lt_hhmm(in1, out1)):
-                    errors.append(f"{dkey} 第1希望の時間を HH:MM / IN<OUT で入力してください。")
+                    errors.append(
+                        f"{dkey} 第1希望の時間を HH:MM / IN<OUT で入力してください。"
+                    )
                 else:
                     items.append((None, code, dkey, in1, out1, note))
 
             # 第2希望（任意／両方埋まっているときだけ登録対象）
             if in2 or out2:
                 if not (_is_hhmm(in2) and _is_hhmm(out2) and _lt_hhmm(in2, out2)):
-                    errors.append(f"{dkey} 第2希望の時間を HH:MM / IN<OUT で入力してください。")
+                    errors.append(
+                        f"{dkey} 第2希望の時間を HH:MM / IN<OUT で入力してください。"
+                    )
                 else:
                     items.append((None, code, dkey, in2, out2, note))
 
         if errors:
-            messagebox.showwarning("入力チェック", "\n".join(errors[:8]) + ("\n…他" if len(errors) > 8 else ""))
+            messagebox.showwarning(
+                "入力チェック",
+                "\n".join(errors[:8]) + ("\n…他" if len(errors) > 8 else ""),
+            )
             return
 
         if not items:
-            if messagebox.askyesno("確認", "入力が空です。この週の既存シフトをすべて削除しますか？"):
+            if messagebox.askyesno(
+                "確認", "入力が空です。この週の既存シフトをすべて削除しますか？"
+            ):
                 self._delete_all_in_week(code)
                 messagebox.showinfo("シフト", "この週のシフトを削除しました。")
                 self._build_week_rows()
@@ -261,6 +291,8 @@ class ShiftSubmitScreen(ctk.CTkFrame):
     def _delete_all_in_week(self, code: str):
         s = self.week_start
         e = s + timedelta(days=6)
-        exists = self.shift_repo.list_by_range(s.strftime("%Y-%m-%d"), e.strftime("%Y-%m-%d"), employee_code=code)
+        exists = self.shift_repo.list_by_range(
+            s.strftime("%Y-%m-%d"), e.strftime("%Y-%m-%d"), employee_code=code
+        )
         for r in exists:
             self.shift_repo.delete(r["id"])
