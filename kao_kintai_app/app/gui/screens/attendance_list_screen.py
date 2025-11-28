@@ -15,7 +15,7 @@ from app.services.attendance_service import AttendanceService  # 未使用だが
 # ===============================================================
 class DatePickerEntry(ctk.CTkFrame):
     def __init__(self, master, textvariable: tk.StringVar | None = None,
-                 width=130, placeholder_text="YYYY-MM-DD"):
+                width=130, placeholder_text="YYYY-MM-DD"):
         super().__init__(master)
         self.var = textvariable or tk.StringVar()
 
@@ -199,27 +199,6 @@ class AttendanceListScreen(ctk.CTkFrame):
         ).pack(side="left", padx=6)
         ctk.CTkButton(meta, text="CSVエクスポート", command=self.export_csv).pack(
             side="right", padx=4
-        )
-
-        # ---------------- 一覧（Treeview） ----------------
-        style = ttk.Style()
-        try:
-            style.theme_use("clam")
-        except Exception:
-            pass
-        style.configure(
-            "Treeview",
-            font=("Meiryo UI", 14),
-            rowheight=36,
-            background="#FFFFFF",
-            foreground="#222222",
-            fieldbackground="#FFFFFF",
-        )
-        style.configure(
-            "Treeview.Heading",
-            font=("Meiryo UI", 15, "bold"),
-            background="#E5E7EB",
-            foreground="#111111",
         )
 
         table_wrap = ctk.CTkFrame(self)
