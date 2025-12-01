@@ -11,6 +11,7 @@ from .screens.my_attendance_screen import MyAttendanceScreen
 from .screens.admin_login_screen import AdminLoginScreen
 from .screens.shift_view_screen import ShiftViewScreen
 
+from .screens.shift_submit_screen import ShiftSubmitScreen
 
 from app.infra.db.attendance_repo import AttendanceRepo
 
@@ -722,7 +723,7 @@ class AppShell(ctk.CTkFrame):
 
         elif key == "list":
             # 📑 ボタンで「勤怠一覧」を開きたい前提に戻しています
-            screen = AttendanceListScreen(self.body)
+            screen = ShiftSubmitScreen(self.body)
 
         elif key == "my":
             screen = MyAttendanceScreen(self.body)
