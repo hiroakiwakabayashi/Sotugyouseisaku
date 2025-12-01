@@ -1,3 +1,5 @@
+#C kao_kintai_app\app\gui\screens\my_attendance_screen.py
+
 # -*- coding: utf-8 -*-
 import customtkinter as ctk
 import tkinter as tk
@@ -15,7 +17,7 @@ from app.services.attendance_service import AttendanceService
 # ===============================================================
 class DatePickerEntry(ctk.CTkFrame):
     def __init__(self, master, textvariable: tk.StringVar | None = None,
-                 width=130, placeholder_text="YYYY-MM-DD"):
+                width=130, placeholder_text="YYYY-MM-DD"):
         super().__init__(master)
         self.var = textvariable or tk.StringVar()
 
@@ -204,6 +206,99 @@ class MyAttendanceScreen(ctk.CTkFrame):
     def _employee_options(self):
         rows = self.emp_repo.list_all()
         return [f"{r['code']} {r['name']}" for r in rows]
+    
+    # ====== 検索バー連携用（従業員選択） ======
+    def _select_employee_by_keyword(self, keyword: str) -> bool:
+        """
+        キーワード（氏名 or コードの一部）から
+        プルダウンの従業員を 1 件選択する。
+        見つかったら True / なければ False を返す。
+        """
+        kw = (keyword or "").strip().lower()
+        if not kw:
+            return False
+
+        # 現在 OptionMenu に設定されている値一覧を取得
+        options = list(self.emp_menu.cget("values")) or []
+        if not options:
+            # 念のため DB から再取得して反映
+            options = self._employee_options()
+            if options:
+                self.emp_menu.configure(values=options)
+
+        for opt in options:
+            # opt: "E0001 山田 太郎" のような形式
+            if kw in opt.lower():
+                self.emp_var.set(opt)
+                self.emp_menu.set(opt)
+                return True
+
+        return False
+
+    # ====== ヘッダー検索連携：キーワードから従業員を選択して検索 ======
+    def on_search_keyword(self, keyword: str) -> None:
+        """
+        ヘッダーの検索バーで Enter されたときに呼ばれる想定の入口。
+        - キーワードから従業員を特定
+        - 日付は「今月」で固定して検索
+        """
+        kw = (keyword or "").strip()
+        if not kw:
+            return
+
+        if not self._select_employee_by_keyword(kw):
+            messagebox.showinfo("検索", f"「{kw}」に該当する従業員が見つかりませんでした。")
+            return
+
+        # ★ 日付範囲：「今月」で表示（仕様に応じて quick_today 等にしてもOK）
+        self.quick_month()
+
+    def on_search_from_record(self, record: dict) -> None:
+        """
+        検索サジェストで 1件選択されたときに呼ばれる想定の入口。
+        - record から従業員コード・氏名・打刻日時(ts)を受け取り、
+        その日付 1 日分のマイ勤怠を表示する。
+        """
+        if not record:
+            return
+
+        code = record.get("employee_code", "")
+        name = record.get("name", "")
+        ts   = record.get("ts", "")
+
+        if not code:
+            return
+
+        # --- 従業員プルダウンの選択 ---
+        label = f"{code} {name}".strip()
+        options = list(self.emp_menu.cget("values")) or []
+        if label in options:
+            self.emp_var.set(label)
+            self.emp_menu.set(label)
+        elif options:
+            # 万一マッチしなければ先頭にフォールバック
+            self.emp_var.set(options[0])
+            self.emp_menu.set(options[0])
+
+        # --- ts から日付部分だけ抜き出し ---
+        date_str = ""
+        if "T" in ts:
+            date_str = ts.split("T", 1)[0]
+        elif " " in ts:
+            date_str = ts.split(" ", 1)[0]
+        else:
+            date_str = ts[:10]
+
+        # フォーマットチェック（失敗したら何もしない）
+        try:
+            datetime.strptime(date_str, "%Y-%m-%d")
+        except Exception:
+            return
+
+        # 開始日・終了日ともにその1日に固定して検索
+        self.start_var.set(date_str)
+        self.end_var.set(date_str)
+        self.search()
 
     def _emp_code_selected(self) -> str | None:
         v = self.emp_var.get()

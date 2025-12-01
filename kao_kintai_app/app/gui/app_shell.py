@@ -210,15 +210,33 @@ class AppShell(ctk.CTkFrame):
         self._destroy_search_popup()
         self._destroy_profile_menu()
 
-    # ================= 検索系 =================
     def _on_search(self, event=None):
         kw = self.search_var.get().strip()
         if not kw:
             return
-        self.show("my")
-        if isinstance(self.current_screen, AttendanceListScreen):
-            self.current_screen.on_search(kw)
+
+        # サジェストは閉じる
         self._destroy_search_popup()
+
+        # ★ MY勤怠画面へ遷移
+        self.show("my")
+
+        from .screens.my_attendance_screen import MyAttendanceScreen
+        if isinstance(self.current_screen, MyAttendanceScreen):
+            # キーワードから従業員を特定し、「今月」で表示
+            self.current_screen.on_search_keyword(kw)
+
+        # サジェストポップアップを閉じる
+        self._destroy_search_popup()
+
+        # ★ MY勤怠画面を表示
+        self.show("my")
+
+        # ★ MY勤怠画面にキーワードを渡して、自動で従業員選択＋検索
+        from .screens.my_attendance_screen import MyAttendanceScreen
+        if isinstance(self.current_screen, MyAttendanceScreen):
+            # my_attendance_screen.py に追加したメソッドを呼ぶ
+            self.current_screen.on_search_keyword(kw)
 
     def _on_search_change(self, event: tk.Event):
         if event.keysym == "Return":
@@ -522,12 +540,24 @@ class AppShell(ctk.CTkFrame):
         self._destroy_search_popup()
 
     def _select_search_result(self, record: dict):
+        """
+        サジェスト候補（1件の勤怠レコード）がクリックされたときの処理。
+        MY勤怠画面に遷移し、そのレコードの日付で 1 日分を表示する。
+        """
         name = record.get("name", "")
         self.search_var.set(name)
+
+        # サジェストを閉じる
         self._destroy_search_popup()
-        self.show("list")
-        if isinstance(self.current_screen, AttendanceListScreen):
-            self.current_screen.on_search(name)
+
+        # ★ MY勤怠画面へ遷移
+        self.show("my")
+
+        from .screens.my_attendance_screen import MyAttendanceScreen
+        if isinstance(self.current_screen, MyAttendanceScreen):
+            # レコード情報（ts / employee_code / name）から
+            # 従業員 + 日付を決めて 1 日分を検索
+            self.current_screen.on_search_from_record(record)
 
     def _clear_search(self):
         self.search_var.set("")
