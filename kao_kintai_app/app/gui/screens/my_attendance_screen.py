@@ -122,39 +122,67 @@ class MyAttendanceScreen(ctk.CTkFrame):
             row=0, column=0, sticky="w", padx=16, pady=(16, 8)
         )
 
-        # フィルタ行
+        # フィルタ行（勤怠一覧と同じく 2 段構成）
         filt = ctk.CTkFrame(self)
         filt.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 8))
-        for i in range(12):
-            filt.grid_columnconfigure(i, weight=0)
-        filt.grid_columnconfigure(11, weight=1)
+        filt.grid_columnconfigure(0, weight=1)
 
-        # 従業員
-        ctk.CTkLabel(filt, text="従業員").grid(row=0, column=0, padx=(8, 4), pady=6, sticky="e")
-        self.emp_menu = ctk.CTkOptionMenu(filt, values=self._employee_options(), variable=self.emp_var, width=260)
-        self.emp_menu.grid(row=0, column=1, padx=(0, 12), pady=6, sticky="w")
+        BTN_H = 36  # ボタン高さを統一
 
-        # 期間
-        ctk.CTkLabel(filt, text="開始日").grid(row=0, column=2, padx=(8, 4), pady=6, sticky="e")
-        DatePickerEntry(filt, textvariable=self.start_var, width=130).grid(
-            row=0, column=3, padx=(0, 12), pady=6, sticky="w"
+        # ---------- 1段目：従業員 / 開始日 / 終了日 ----------
+        row1 = ctk.CTkFrame(filt, fg_color="transparent")
+        row1.grid(row=0, column=0, sticky="ew")
+        for c in range(3):
+            row1.grid_columnconfigure(c, weight=1)
+
+        # 従業員グループ
+        emp_box = ctk.CTkFrame(row1, fg_color="transparent")
+        emp_box.grid(row=0, column=0, sticky="w", padx=4, pady=4)
+        ctk.CTkLabel(emp_box, text="従業員").pack(side="left", padx=(0, 4))
+        self.emp_menu = ctk.CTkOptionMenu(
+            emp_box,
+            values=self._employee_options(),
+            variable=self.emp_var,
+            width=260,
         )
-        ctk.CTkLabel(filt, text="終了日").grid(row=0, column=4, padx=(8, 4), pady=6, sticky="e")
-        DatePickerEntry(filt, textvariable=self.end_var, width=130).grid(
-            row=0, column=5, padx=(0, 12), pady=6, sticky="w"
+        self.emp_menu.pack(side="left")
+
+        # 開始日グループ
+        start_box = ctk.CTkFrame(row1, fg_color="transparent")
+        start_box.grid(row=0, column=1, sticky="w", padx=4, pady=4)
+        ctk.CTkLabel(start_box, text="開始日").pack(side="left", padx=(0, 4))
+        DatePickerEntry(start_box, textvariable=self.start_var, width=130).pack(
+            side="left"
         )
 
-        BTN_W, BTN_H = 120, 36
-        ctk.CTkButton(filt, text="検索", width=BTN_W, height=BTN_H, command=self.search)\
-            .grid(row=0, column=6, padx=4, pady=6)
-        ctk.CTkButton(filt, text="今日", width=BTN_W, height=BTN_H, command=self.quick_today)\
-            .grid(row=0, column=7, padx=4, pady=6)
-        ctk.CTkButton(filt, text="今月", width=BTN_W, height=BTN_H, command=self.quick_month)\
-            .grid(row=0, column=8, padx=4, pady=6)
-        ctk.CTkButton(filt, text="今年", width=BTN_W, height=BTN_H, command=self.quick_year)\
-            .grid(row=0, column=9, padx=4, pady=6)
-        ctk.CTkButton(filt, text="CSV出力", width=BTN_W, height=BTN_H, command=self.export_csv)\
-            .grid(row=0, column=10, padx=4, pady=6)
+        # 終了日グループ
+        end_box = ctk.CTkFrame(row1, fg_color="transparent")
+        end_box.grid(row=0, column=2, sticky="w", padx=4, pady=4)
+        ctk.CTkLabel(end_box, text="終了日").pack(side="left", padx=(0, 4))
+        DatePickerEntry(end_box, textvariable=self.end_var, width=130).pack(
+            side="left"
+        )
+
+        # ---------- 2段目：クイックボタン列（4つを均等配置） ----------
+        row2 = ctk.CTkFrame(filt, fg_color="transparent")
+        row2.grid(row=1, column=0, sticky="ew")
+        for c in range(4):
+            row2.grid_columnconfigure(c, weight=1)
+
+        quick_buttons = [
+            ("今日", self.quick_today),
+            ("今月", self.quick_month),
+            ("今年", self.quick_year),
+            ("CSV出力", self.export_csv),
+        ]
+        for col, (label, cmd) in enumerate(quick_buttons):
+            ctk.CTkButton(
+                row2,
+                text=label,
+                height=BTN_H,
+                command=cmd,
+            ).grid(row=0, column=col, padx=4, pady=(2, 4), sticky="ew")
+
 
         # 表
         table_wrap = ctk.CTkFrame(self)

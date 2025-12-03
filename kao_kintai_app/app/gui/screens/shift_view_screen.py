@@ -137,11 +137,11 @@ def _hhmm_to_minutes(hhmm: str) -> int:
 
 class ShiftViewScreen(ctk.CTkFrame):
     """シフト閲覧（読み取り専用）
-       - 従業員選択（空=全員）
-       - 期間絞り込み（今日 / 今週 / 今月 / 任意）
-       - 一覧表示（日付・開始・終了・合計時間・メモ）
-       - 件数/合計時間サマリ
-       - CSV出力
+        - 従業員選択（空=全員）
+        - 期間絞り込み（今日 / 今週 / 今月 / 任意）
+        - 一覧表示（日付・開始・終了・合計時間・メモ）
+        - 件数/合計時間サマリ
+        - CSV出力
     """
     def __init__(self, master):
         super().__init__(master)
@@ -150,65 +150,155 @@ class ShiftViewScreen(ctk.CTkFrame):
         self.shift_repo = ShiftRepo()
         self.emp_repo = EmployeeRepo()
 
+        # ★ 件数 / 合計時間 表示用
+        self.count_var = tk.StringVar(value="0 件")
+        self.total_hours_var = tk.StringVar(value="合計時間: 0.00 h")
+
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         # タイトル
-        ctk.CTkLabel(self, text="🗓 シフト閲覧", font=("Meiryo UI", 18, "bold"))\
-            .grid(row=0, column=0, sticky="w", padx=12, pady=(12, 6))
+        ctk.CTkLabel(self, text="🗓 シフト閲覧", font=("Meiryo UI", 22, "bold"))\
+            .grid(row=0, column=0, sticky="w", padx=16, pady=(16, 8))
 
         # ===== 条件行 =====
-        cond = ctk.CTkFrame(self)
-        cond.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 6))
-        for i in range(12):
-            cond.grid_columnconfigure(i, weight=0)
-        cond.grid_columnconfigure(11, weight=1)
+        filt = ctk.CTkFrame(self)
+        filt.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 8))
+        filt.grid_columnconfigure(0, weight=1)
 
-        # 従業員選択
-        ctk.CTkLabel(cond, text="従業員:").grid(row=0, column=0, padx=(8,4), pady=8, sticky="w")
-        self.emp_values = ["(全員)"] + [f'{r["code"]}:{r["name"]}' for r in self.emp_repo.list_all()]
+        BTN_H = 32  # ボタン高さ（勤怠一覧と揃える）
+
+        # ---------- 1段目：従業員 / 開始日 / 終了日 ----------
+        row1 = ctk.CTkFrame(filt, fg_color="transparent")
+        row1.grid(row=0, column=0, sticky="ew")
+        for c in range(3):
+            row1.grid_columnconfigure(c, weight=1)
+
+        # 従業員グループ
+        emp_box = ctk.CTkFrame(row1, fg_color="transparent")
+        emp_box.grid(row=0, column=0, sticky="w", padx=4, pady=4)
+        ctk.CTkLabel(emp_box, text="従業員").pack(side="left", padx=(0, 4))
+        self.emp_values = ["(全員)"] + [
+            f'{r["code"]}:{r["name"]}' for r in self.emp_repo.list_all()
+        ]
         self.emp_var = tk.StringVar(value=self.emp_values[0])
-        self.emp_sel = ctk.CTkOptionMenu(cond, values=self.emp_values, variable=self.emp_var, width=200)
-        self.emp_sel.grid(row=0, column=1, padx=4, pady=8, sticky="w")
+        self.emp_sel = ctk.CTkOptionMenu(
+            emp_box,
+            values=self.emp_values,
+            variable=self.emp_var,
+            width=220,
+        )
+        self.emp_sel.pack(side="left")
 
-        # 期間（← カレンダー付きエントリーを使用）
-        ctk.CTkLabel(cond, text="期間:").grid(row=0, column=2, padx=(16,4), pady=8, sticky="w")
+        # 開始日グループ
+        start_box = ctk.CTkFrame(row1, fg_color="transparent")
+        start_box.grid(row=0, column=1, sticky="w", padx=4, pady=4)
+        ctk.CTkLabel(start_box, text="開始日").pack(side="left", padx=(0, 4))
         s0, e0 = _week_range()
         self.start_var = tk.StringVar(value=s0)
-        self.end_var   = tk.StringVar(value=e0)
-        DatePickerEntry(cond, textvariable=self.start_var, width=130).grid(row=0, column=3, padx=4, pady=8, sticky="w")
-        DatePickerEntry(cond, textvariable=self.end_var,   width=130).grid(row=0, column=4, padx=4, pady=8, sticky="w")
+        DatePickerEntry(start_box, textvariable=self.start_var, width=130).pack(
+            side="left"
+        )
 
-        # 操作用ボタン（サイズ統一）
-        BTN_W = 64
-        ctk.CTkButton(cond, text="今日",  width=BTN_W, command=self._quick_today).grid(row=0, column=5, padx=4)
-        ctk.CTkButton(cond, text="今週",  width=BTN_W, command=self._quick_week).grid(row=0, column=6, padx=4)
-        ctk.CTkButton(cond, text="今月",  width=BTN_W, command=self._quick_month).grid(row=0, column=7, padx=4)
-        ctk.CTkButton(cond, text="検索",  width=90, command=self._search).grid(row=0, column=8, padx=(12,4))
-        ctk.CTkButton(cond, text="CSV出力", width=90, command=self._export_csv).grid(row=0, column=9, padx=4)
+        # 終了日グループ
+        end_box = ctk.CTkFrame(row1, fg_color="transparent")
+        end_box.grid(row=0, column=2, sticky="w", padx=4, pady=4)
+        ctk.CTkLabel(end_box, text="終了日").pack(side="left", padx=(0, 4))
+        self.end_var = tk.StringVar(value=e0)
+        DatePickerEntry(end_box, textvariable=self.end_var, width=130).pack(
+            side="left"
+        )
 
-        # ===== 一覧 =====
-        body = ctk.CTkFrame(self)
-        body.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 12))
-        body.grid_rowconfigure(1, weight=1)
-        body.grid_columnconfigure(0, weight=1)
+        # ---------- 2段目：クイックボタン列（均等3分割） ----------
+        row2 = ctk.CTkFrame(filt, fg_color="transparent")
+        row2.grid(row=1, column=0, sticky="ew")
+        for c in range(3):
+            row2.grid_columnconfigure(c, weight=1)
 
-        header = ctk.CTkFrame(body, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew")
-        titles = ["従業員コード", "氏名", "日付", "開始", "終了", "合計(h)", "メモ"]
-        for i, t in enumerate(titles):
-            ctk.CTkLabel(header, text=t, anchor="w").grid(row=0, column=i, padx=8, pady=6, sticky="w")
-            header.grid_columnconfigure(i, weight=1 if i in (0,1,2,6) else 0)
+        quick_buttons = [
+            ("今日", self._quick_today),
+            ("今週", self._quick_week),
+            ("今月", self._quick_month),
+        ]
+        for col, (label, cmd) in enumerate(quick_buttons):
+            ctk.CTkButton(
+                row2,
+                text=label,
+                height=BTN_H,
+                command=cmd,
+            ).grid(row=0, column=col, padx=4, pady=(2, 4), sticky="ew")
 
-        self.scroll = ctk.CTkScrollableFrame(body, height=420)
-        self.scroll.grid(row=1, column=0, sticky="nsew")
-        self._row_widgets = []
+        # ===== 一覧（Treeview） =====
+        table_wrap = ctk.CTkFrame(self)
+        table_wrap.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 12))
+        table_wrap.grid_rowconfigure(0, weight=1)
+        table_wrap.grid_columnconfigure(0, weight=1)
 
-        self.summary = ctk.CTkLabel(body, text="—", anchor="w")
-        self.summary.grid(row=2, column=0, sticky="ew", padx=8, pady=(8, 4))
+        # ===== 一覧（Treeview） =====
+        table_wrap = ctk.CTkFrame(self)
+        table_wrap.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 12))
+        table_wrap.grid_rowconfigure(0, weight=1)
+        table_wrap.grid_columnconfigure(0, weight=1)
+
+        from tkinter import ttk
+
+        self.tree = ttk.Treeview(
+            table_wrap,
+            columns=("code", "name", "date", "start", "end", "hours", "note"),
+            show="headings",
+            height=18,
+        )
+
+        self.tree.heading("code",  text="従業員コード")
+        self.tree.heading("name",  text="氏名")
+        self.tree.heading("date",  text="日付")
+        self.tree.heading("start", text="開始")
+        self.tree.heading("end",   text="終了")
+        self.tree.heading("hours", text="合計(h)")
+        self.tree.heading("note",  text="メモ")
+
+        self.tree.column("code",  width=130, anchor="center")
+        self.tree.column("name",  width=150, anchor="w")
+        self.tree.column("date",  width=110, anchor="center")
+        self.tree.column("start", width=80,  anchor="center")
+        self.tree.column("end",   width=80,  anchor="center")
+        self.tree.column("hours", width=90,  anchor="e")
+        self.tree.column("note",  width=200, anchor="w")
+
+        self.tree.grid(row=0, column=0, sticky="nsew")
+
+        scroll = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scroll.set)
+        scroll.grid(row=0, column=1, sticky="ns")
+
+        # ゼブラ柄（勤怠一覧と統一）
+        self.tree.tag_configure("even", background="#FFFFFF")
+        self.tree.tag_configure("odd",  background="#F9FAFB")
 
         # 初回検索
         self._search()
+
+        # ===== 件数 / 合計時間 + CSV（勤怠一覧風） =====
+        meta = ctk.CTkFrame(self)
+        meta.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 12))
+        meta.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            meta,
+            textvariable=self.count_var,
+            font=("Meiryo UI", 14),
+        ).pack(side="left", padx=6)
+        ctk.CTkLabel(
+            meta,
+            textvariable=self.total_hours_var,
+            font=("Meiryo UI", 14),
+        ).pack(side="left", padx=16)
+        ctk.CTkButton(
+            meta,
+            text="CSV出力",
+            command=self._export_csv,
+            width=120,
+        ).pack(side="right", padx=4)
 
     # ==== helpers ====
     def _emp_code(self):
@@ -230,42 +320,14 @@ class ShiftViewScreen(ctk.CTkFrame):
         self.start_var.set(s); self.end_var.set(e)
         self._search()
 
-    def _clear_rows(self):
-        for w in self._row_widgets:
-            try:
-                w.destroy()
-            except:
-                pass
-        self._row_widgets.clear()
-
-    def _add_row(self, code, name, work_date, start, end, hours, note):
-        r = len(self._row_widgets)//7
-        cells = [
-            ctk.CTkLabel(self.scroll, text=code, anchor="w"),
-            ctk.CTkLabel(self.scroll, text=name, anchor="w"),
-            ctk.CTkLabel(self.scroll, text=work_date, anchor="w"),
-            ctk.CTkLabel(self.scroll, text=start, anchor="w"),
-            ctk.CTkLabel(self.scroll, text=end, anchor="w"),
-            ctk.CTkLabel(self.scroll, text=f"{hours:.2f}", anchor="e"),
-            ctk.CTkLabel(self.scroll, text=note, anchor="w"),
-        ]
-        for i, c in enumerate(cells):
-            c.grid(row=r, column=i, padx=8, pady=3, sticky="ew" if i in (0,1,2,6) else "w")
-            self._row_widgets.append(c)
-
-    # ==== actions ====
     def _search(self):
-        self._clear_rows()
-
+        # データ取得
         s, e = self.start_var.get().strip(), self.end_var.get().strip()
         try:
-            ds = datetime.strptime(s, "%Y-%m-%d")
-            de = datetime.strptime(e, "%Y-%m-%d")
+            datetime.strptime(s, "%Y-%m-%d")
+            datetime.strptime(e, "%Y-%m-%d")
         except ValueError:
-            messagebox.showwarning("日付エラー", "日付は YYYY-MM-DD 形式で入力してください。")
-            return
-        if ds > de:
-            messagebox.showwarning("日付エラー", "開始日が終了日より後になっています。")
+            messagebox.showwarning("日付エラー", "日付形式が不正です。")
             return
 
         code = self._emp_code()
@@ -274,27 +336,38 @@ class ShiftViewScreen(ctk.CTkFrame):
         # 名前キャッシュ
         name_map = {r["code"]: r["name"] for r in self.emp_repo.list_all()}
 
+        # Treeview クリア
+        for iid in self.tree.get_children():
+            self.tree.delete(iid)
+
+        # 挿入
         total_hours = 0.0
-        for r in rows:
-            st_m = _hhmm_to_minutes(r["start_time"])
-            en_m = _hhmm_to_minutes(r["end_time"])
-            mins = max(0, en_m - st_m)
-            h = mins / 60.0
+        for i, r in enumerate(rows):
+            st = _hhmm_to_minutes(r["start_time"])
+            en = _hhmm_to_minutes(r["end_time"])
+            h = max(0, en - st) / 60.0
             total_hours += h
 
-            code = r["employee_code"]
-            name = name_map.get(code, "")
-            self._add_row(
-                code=code,
-                name=name,
-                work_date=r["work_date"],
-                start=r["start_time"],
-                end=r["end_time"],
-                hours=h,
-                note=r.get("note", "")
+            tag = "even" if i % 2 == 0 else "odd"
+
+            self.tree.insert(
+                "",
+                "end",
+                values=(
+                    r["employee_code"],
+                    name_map.get(r["employee_code"], ""),
+                    r["work_date"],
+                    r["start_time"],
+                    r["end_time"],
+                    f"{h:.2f}",
+                    r.get("note", "")
+                ),
+                tags=(tag,),
             )
 
-        self.summary.configure(text=f"件数: {len(rows)}  / 合計時間: {total_hours:.2f} h")
+            # 下部表示更新
+            self.count_var.set(f"{len(rows)} 件")
+            self.total_hours_var.set(f"合計時間: {total_hours:.2f} h")
 
     def _export_csv(self):
         s, e = self.start_var.get().strip(), self.end_var.get().strip()
