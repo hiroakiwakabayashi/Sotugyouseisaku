@@ -189,6 +189,10 @@ class MyAttendanceScreen(ctk.CTkFrame):
         self.tree.configure(yscrollcommand=yscroll.set)
         yscroll.grid(row=0, column=1, sticky="ns")
 
+        # ★ ゼブラ背景（勤怠一覧と同じ雰囲気）
+        self.tree.tag_configure("even", background="#FFFFFF")
+        self.tree.tag_configure("odd",  background="#F9FAFB")
+
         # 合計行
         sum_bar = ctk.CTkFrame(self)
         sum_bar.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 12))
@@ -342,14 +346,30 @@ class MyAttendanceScreen(ctk.CTkFrame):
         for iid in self.tree.get_children():
             self.tree.delete(iid)
 
-        # 反映 + 合計
+        # 反映 + 合計（ゼブラ背景つき）
         tot_w, tot_b = 0, 0
-        for r in rows:
-            wmin = r["work_minutes"]; bmin = r["break_minutes"]
-            tot_w += wmin; tot_b += bmin
+        for i, r in enumerate(rows):
+            wmin = r["work_minutes"]
+            bmin = r["break_minutes"]
+            tot_w += wmin
+            tot_b += bmin
+
+            # 偶数行/奇数行でタグを振り分け
+            tag = "even" if i % 2 == 0 else "odd"
+
             self.tree.insert(
-                "", "end",
-                values=(r["date"], r["code"], r["name"], wmin, f"{wmin/60:.2f}", bmin, f"{bmin/60:.2f}")
+                "",
+                "end",
+                values=(
+                    r["date"],
+                    r["code"],
+                    r["name"],
+                    wmin,
+                    f"{wmin/60:.2f}",
+                    bmin,
+                    f"{bmin/60:.2f}",
+                ),
+                tags=(tag,),
             )
 
         self.sum_work_var.set(f"実働合計: {tot_w/60:.2f} h")

@@ -126,6 +126,7 @@ class EmployeeRegisterScreen(ctk.CTkFrame):
             columns=("code", "name", "role", "active", "created_at"),
             show="headings",
         )
+
         self.tree.heading("code", text="コード")
         self.tree.heading("name", text="氏名")
         self.tree.heading("role", text="ロール")
@@ -149,6 +150,10 @@ class EmployeeRegisterScreen(ctk.CTkFrame):
         )
         self.tree.configure(yscrollcommand=yscroll.set)
         yscroll.grid(row=0, column=1, sticky="ns")
+
+        self.tree.tag_configure("even", background="#FFFFFF")
+        self.tree.tag_configure("odd",  background="#F9FAFB")
+
 
         # 行選択イベント
         self.tree.bind("<<TreeviewSelect>>", self.on_select_row)
@@ -231,8 +236,12 @@ class EmployeeRegisterScreen(ctk.CTkFrame):
             self.tree.delete(i)
 
         # 再描画（作成日時を整形して表示）
-        for r in self.repo.list_all():
+        for i, r in enumerate(self.repo.list_all()):
             created = self._format_dt(r.get("created_at"))
+
+            # ★ 偶数行 / 奇数行でタグ付け
+            tag = "even" if i % 2 == 0 else "odd"
+
             self.tree.insert(
                 "",
                 "end",
@@ -243,4 +252,5 @@ class EmployeeRegisterScreen(ctk.CTkFrame):
                     "✓" if r["active"] else "-",
                     created,
                 ),
+                tags=(tag,),
             )
