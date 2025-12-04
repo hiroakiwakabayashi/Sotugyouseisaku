@@ -258,12 +258,12 @@ class ShiftViewScreen(ctk.CTkFrame):
         self.tree.heading("note",  text="メモ")
 
         self.tree.column("code",  width=130, anchor="center")
-        self.tree.column("name",  width=150, anchor="w")
+        self.tree.column("name",  width=150, anchor="center")
         self.tree.column("date",  width=110, anchor="center")
         self.tree.column("start", width=80,  anchor="center")
         self.tree.column("end",   width=80,  anchor="center")
-        self.tree.column("hours", width=90,  anchor="e")
-        self.tree.column("note",  width=200, anchor="w")
+        self.tree.column("hours", width=90,  anchor="center")
+        self.tree.column("note",  width=200, anchor="center")
 
         self.tree.grid(row=0, column=0, sticky="nsew")
 

@@ -206,11 +206,11 @@ class MyAttendanceScreen(ctk.CTkFrame):
 
         self.tree.column("date",    width=120, anchor="center")
         self.tree.column("code",    width=120, anchor="center")
-        self.tree.column("name",    width=160, anchor="w")
-        self.tree.column("work_m",  width=110, anchor="e")
-        self.tree.column("work_h",  width=120, anchor="e")
-        self.tree.column("break_m", width=110, anchor="e")
-        self.tree.column("break_h", width=120, anchor="e")
+        self.tree.column("name",    width=160, anchor="center")
+        self.tree.column("work_m",  width=110, anchor="center")
+        self.tree.column("work_h",  width=120, anchor="center")
+        self.tree.column("break_m", width=110, anchor="center")
+        self.tree.column("break_h", width=120, anchor="center")
 
         self.tree.grid(row=0, column=0, sticky="nsew")
         yscroll = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
