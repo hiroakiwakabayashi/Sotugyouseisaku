@@ -8,21 +8,40 @@ import re
 from app.infra.db.employee_repo import EmployeeRepo
 from app.infra.db.shift_repo import ShiftRepo
 
+# =========================
+# 時刻ユーティリティ（要件対応）
+# =========================
 
-_HHMM = re.compile(r"^\d{2}:\d{2}$")
+_COMPACT = re.compile(r"^\d{3,4}$")      # 600 / 0900 / 1730
+_HHMM = re.compile(r"^\d{2}:\d{2}$")     # 06:00 / 17:30
 
+def _from_db_to_compact(hhmm: str) -> str:
+    """'HH:MM' → 'HMM/HHMM'（先頭0を落としてコロン無し）"""
+    if not _HHMM.match(hhmm):
+        return hhmm  # 想定外はそのまま返す
+    hh, mm = hhmm.split(":")
+    h = str(int(hh))  # 先頭ゼロ除去（'00'→'0'）
+    return f"{h}{mm}"
 
-def _is_hhmm(s: str) -> bool:
+def _compact_to_hhmm(s: str) -> str | None:
+    """
+    '600' / '0900' / '1730' → 'HH:MM' に正規化。
+    不正なら None を返す。
+    """
     if not s:
-        return False
-    if not _HHMM.match(s):
-        return False
-    hh, mm = map(int, s.split(":"))
-    return 0 <= hh <= 23 and 0 <= mm <= 59
-
+        return None
+    s = s.strip()
+    if not _COMPACT.match(s):
+        return None
+    # 後ろ2桁が分、前が時
+    mm = int(s[-2:])
+    hh = int(s[:-2])
+    if not (0 <= hh <= 23 and 0 <= mm <= 59):
+        return None
+    return f"{hh:02d}:{mm:02d}"
 
 def _lt_hhmm(a: str, b: str) -> bool:
-    """a < b を HH:MM で判定"""
+    """a < b を 'HH:MM' で判定（双方とも 'HH:MM' 前提）"""
     ah, am = map(int, a.split(":"))
     bh, bm = map(int, b.split(":"))
     return (ah, am) < (bh, bm)
@@ -31,10 +50,10 @@ def _lt_hhmm(a: str, b: str) -> bool:
 class ShiftSubmitScreen(ctk.CTkFrame):
     """
     従業員が週次でシフトを「希望提出」する画面。
-    - 第1希望: IN/OUT
-    - 第2希望: IN/OUT（任意）
-    どちらも HH:MM。第2希望は両方埋まっていれば登録対象。
-    保存時は、1日につき最大2件を ShiftRepo.upsert_many() で一括保存。
+    - 入力形式は HHMM（コロン無し）。例: 600, 900, 1730
+    - 第1希望 IN/OUT（必須扱いではないが、両方埋まっていないと登録しない）
+    - 第2希望 IN/OUT（任意。両方埋まっているときだけ登録）
+    - DB保存時は 'HH:MM' に正規化して保存
     """
 
     def __init__(self, master):
@@ -53,12 +72,12 @@ class ShiftSubmitScreen(ctk.CTkFrame):
             self.emp_var.set(emp_opts[0])
 
         # レイアウト
-        self.grid_rowconfigure(2, weight=1)  # ← rows を row=2 に
+        self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
             self,
-            text="🗓 シフト提出（週次 / 第1・第2希望対応）",
+            text="🗓 シフト提出（週次 / 第1・第2希望、時刻はHHMM入力）",
             font=("Meiryo UI", 20, "bold"),
         ).grid(row=0, column=0, sticky="w", padx=16, pady=(16, 6))
 
@@ -93,10 +112,8 @@ class ShiftSubmitScreen(ctk.CTkFrame):
 
         # 0:日付, 1:第1IN, 2:第1OUT, 3:第2IN, 4:第2OUT, 5:メモ
         self.rows.grid_columnconfigure(0, weight=0, minsize=150)
-        self.rows.grid_columnconfigure(1, weight=0, minsize=120)
-        self.rows.grid_columnconfigure(2, weight=0, minsize=120)
-        self.rows.grid_columnconfigure(3, weight=0, minsize=120)
-        self.rows.grid_columnconfigure(4, weight=0, minsize=120)
+        for col in (1, 2, 3, 4):
+            self.rows.grid_columnconfigure(col, weight=0, minsize=110)
         self.rows.grid_columnconfigure(5, weight=1)
 
         # 操作用ボタン
@@ -118,7 +135,6 @@ class ShiftSubmitScreen(ctk.CTkFrame):
     # ---------------- 支援 ----------------
     def _employee_options(self):
         rows = self.emp_repo.list_all()
-        # 表示は「CODE 名前」
         return [f"{r['code']} {r['name']}" for r in rows]
 
     def _selected_code(self) -> str | None:
@@ -179,8 +195,8 @@ class ShiftSubmitScreen(ctk.CTkFrame):
             text_color="#111827",
         ).grid(row=row_index, column=0, padx=6, pady=4, sticky="w")
 
-        # エントリ生成ヘルパ
-        def _mk_entry(col: int, placeholder: str = "HH:MM", width: int = 110):
+        # エントリ生成ヘルパ（placeholder は HHMM）
+        def _mk_entry(col: int, placeholder: str = "HHMM", width: int = 96):
             e = ctk.CTkEntry(self.rows, placeholder_text=placeholder, width=width)
             e.grid(row=row_index, column=col, padx=6, pady=4, sticky="w")
             return e
@@ -189,9 +205,7 @@ class ShiftSubmitScreen(ctk.CTkFrame):
         editors["out1"] = _mk_entry(2)
         editors["in2"] = _mk_entry(3)
         editors["out2"] = _mk_entry(4)
-        editors["note"] = ctk.CTkEntry(
-            self.rows, placeholder_text="メモ（任意）", width=260
-        )
+        editors["note"] = ctk.CTkEntry(self.rows, placeholder_text="メモ（任意）", width=260)
         editors["note"].grid(row=row_index, column=5, padx=6, pady=4, sticky="ew")
 
     def _fill_from_db(self):
@@ -219,17 +233,17 @@ class ShiftSubmitScreen(ctk.CTkFrame):
                 continue
             if len(lst) >= 1:
                 ed["in1"].delete(0, tk.END)
-                ed["in1"].insert(0, lst[0]["start_time"])
+                ed["in1"].insert(0, _from_db_to_compact(lst[0]["start_time"]))
                 ed["out1"].delete(0, tk.END)
-                ed["out1"].insert(0, lst[0]["end_time"])
+                ed["out1"].insert(0, _from_db_to_compact(lst[0]["end_time"]))
                 if lst[0].get("note"):
                     ed["note"].delete(0, tk.END)
                     ed["note"].insert(0, lst[0]["note"])
             if len(lst) >= 2:
                 ed["in2"].delete(0, tk.END)
-                ed["in2"].insert(0, lst[1]["start_time"])
+                ed["in2"].insert(0, _from_db_to_compact(lst[1]["start_time"]))
                 ed["out2"].delete(0, tk.END)
-                ed["out2"].insert(0, lst[1]["end_time"])
+                ed["out2"].insert(0, _from_db_to_compact(lst[1]["end_time"]))
 
     # ---------------- 保存 ----------------
     def _save_week(self):
@@ -242,27 +256,27 @@ class ShiftSubmitScreen(ctk.CTkFrame):
         errors = []
 
         for dkey, ed in self._editors.items():
-            in1 = ed["in1"].get().strip()
-            out1 = ed["out1"].get().strip()
-            in2 = ed["in2"].get().strip()
-            out2 = ed["out2"].get().strip()
+            in1_raw = ed["in1"].get().strip()
+            out1_raw = ed["out1"].get().strip()
+            in2_raw = ed["in2"].get().strip()
+            out2_raw = ed["out2"].get().strip()
             note = ed["note"].get().strip()
 
             # 第1希望（両方埋まっているときだけ登録対象）
-            if in1 or out1:
-                if not (_is_hhmm(in1) and _is_hhmm(out1) and _lt_hhmm(in1, out1)):
-                    errors.append(
-                        f"{dkey} 第1希望の時間を HH:MM / IN<OUT で入力してください。"
-                    )
+            if in1_raw or out1_raw:
+                in1 = _compact_to_hhmm(in1_raw)
+                out1 = _compact_to_hhmm(out1_raw)
+                if not (in1 and out1 and _lt_hhmm(in1, out1)):
+                    errors.append(f"{dkey} 第1希望は HHMM / IN<OUT で入力してください。例: 600, 930, 1730")
                 else:
                     items.append((None, code, dkey, in1, out1, note))
 
             # 第2希望（任意／両方埋まっているときだけ登録対象）
-            if in2 or out2:
-                if not (_is_hhmm(in2) and _is_hhmm(out2) and _lt_hhmm(in2, out2)):
-                    errors.append(
-                        f"{dkey} 第2希望の時間を HH:MM / IN<OUT で入力してください。"
-                    )
+            if in2_raw or out2_raw:
+                in2 = _compact_to_hhmm(in2_raw)
+                out2 = _compact_to_hhmm(out2_raw)
+                if not (in2 and out2 and _lt_hhmm(in2, out2)):
+                    errors.append(f"{dkey} 第2希望は HHMM / IN<OUT で入力してください。例: 600, 930, 1730")
                 else:
                     items.append((None, code, dkey, in2, out2, note))
 
@@ -274,15 +288,13 @@ class ShiftSubmitScreen(ctk.CTkFrame):
             return
 
         if not items:
-            if messagebox.askyesno(
-                "確認", "入力が空です。この週の既存シフトをすべて削除しますか？"
-            ):
+            if messagebox.askyesno("確認", "入力が空です。この週の既存シフトをすべて削除しますか？"):
                 self._delete_all_in_week(code)
                 messagebox.showinfo("シフト", "この週のシフトを削除しました。")
                 self._build_week_rows()
             return
 
-        # 週の既存シフトを削除してから一括保存（上書きの意味）
+        # 週の既存シフトを削除してから一括保存（上書き）
         self._delete_all_in_week(code)
         self.shift_repo.upsert_many(items)
         messagebox.showinfo("シフト", "この週のシフトを保存しました。")
