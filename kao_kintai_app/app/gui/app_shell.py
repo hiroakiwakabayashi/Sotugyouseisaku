@@ -1,7 +1,7 @@
 import customtkinter as ctk
 import os
 import tkinter as tk
-from tkinter import ttk 
+from tkinter import ttk
 from datetime import datetime
 
 from .screens.home_screen import HomeScreen
@@ -15,15 +15,18 @@ from .screens.shift_submit_screen import ShiftSubmitScreen
 
 from app.infra.db.attendance_repo import AttendanceRepo
 
+__all__ = ["AppShell", "run_app"]  # ← 追加：エクスポートを明示
+
 # ★ 開発中だけ True にする。本番運用するときは必ず False に戻すこと。
 DEV_SKIP_ADMIN_LOGIN = True
+
 
 class AppShell(ctk.CTkFrame):
     def __init__(self, master, cfg: dict):
         super().__init__(master)
         self.cfg = cfg
 
-        # ★ 開発モードフラグ（ファイル上部で DEV_SKIP_ADMIN_LOGIN を定義しておく）
+        # ★ 開発モード
         self.dev_skip_admin_login = DEV_SKIP_ADMIN_LOGIN
 
         # 状態管理
@@ -37,7 +40,7 @@ class AppShell(ctk.CTkFrame):
         self.att_repo = AttendanceRepo()
         self.search_popup: tk.Toplevel | None = None
 
-        # ===== Treeview 共通スタイル（勤怠一覧と同じデザイン）=====
+        # ===== Treeview 共通スタイル =====
         style = ttk.Style()
         try:
             style.theme_use("clam")
@@ -57,12 +60,8 @@ class AppShell(ctk.CTkFrame):
             background="#E5E7EB",
             foreground="#111111",
         )
-            
-# ===== 左右レイアウト =====
+
         # ===== 左右レイアウト =====
-        # 0列: 左ナビ (固定幅 NAV_WIDTH)
-        # 1列: 仕切り線 (1pxの薄い灰色)
-        # 2列: 右側メイン (残り全部)
         NAV_WIDTH = 220
         self.NAV_WIDTH = NAV_WIDTH
 
@@ -77,17 +76,16 @@ class AppShell(ctk.CTkFrame):
         self.nav.grid_propagate(False)
         self.nav.pack_propagate(False)
 
-        # ▼ 一般メニュー見出し
         ctk.CTkLabel(
             self.nav,
             text="📋 一般メニュー",
             font=("Meiryo UI", 14, "bold"),
         ).pack(padx=8, pady=(12, 4), anchor="w")
 
-        # 左ナビボタンの統一スタイル
+        # 左ナビボタン（やや小さめ）
         nav_btn_kwargs = dict(
             width=self.NAV_WIDTH - 50,
-            height=34,
+            height=30,            # ← 小型化（元:34）
             corner_radius=8,
             anchor="center",
             font=("Meiryo UI", 14),
@@ -112,7 +110,7 @@ class AppShell(ctk.CTkFrame):
         self.subnav = ctk.CTkFrame(self.nav, fg_color="transparent")
         self.subnav.pack(padx=8, pady=(8, 12), fill="x", anchor="n")
 
-# ★ 開発モードのときは、起動時から SU 管理者としてサブナビを表示
+        # 開発モード：起動時から SU としてサブナビ表示
         if self.dev_skip_admin_login and not self.current_admin:
             self.current_admin = {
                 "username": "dev_admin",
@@ -122,11 +120,7 @@ class AppShell(ctk.CTkFrame):
             self._build_admin_subnav()
 
         # 左メニューと右画面の境界線
-        self.nav_separator = ctk.CTkFrame(
-            self,
-            width=1,
-            fg_color="#D1D5DB",
-        )
+        self.nav_separator = ctk.CTkFrame(self, width=1, fg_color="#D1D5DB")
         self.nav_separator.grid(row=0, column=1, sticky="ns")
 
         # === 右側メイン ===
@@ -202,7 +196,7 @@ class AppShell(ctk.CTkFrame):
         root.bind("<Unmap>", self._on_root_unmap, add="+")
         root.bind("<FocusOut>", self._on_root_focus_out, add="+")
 
-    # ★ 開発モードのときは起動直後から管理者画面を表示
+        # 起動直後の画面
         initial_key = "admin" if self.dev_skip_admin_login else "home"
         self.show(initial_key)
 
@@ -210,32 +204,21 @@ class AppShell(ctk.CTkFrame):
         self._destroy_search_popup()
         self._destroy_profile_menu()
 
+    # ================= 検索系 =================
     def _on_search(self, event=None):
         kw = self.search_var.get().strip()
         if not kw:
             return
-
-        # サジェストは閉じる
         self._destroy_search_popup()
-
-        # ★ MY勤怠画面へ遷移
         self.show("my")
 
         from .screens.my_attendance_screen import MyAttendanceScreen
         if isinstance(self.current_screen, MyAttendanceScreen):
-            # キーワードから従業員を特定し、「今月」で表示
             self.current_screen.on_search_keyword(kw)
 
-        # サジェストポップアップを閉じる
         self._destroy_search_popup()
-
-        # ★ MY勤怠画面を表示
         self.show("my")
-
-        # ★ MY勤怠画面にキーワードを渡して、自動で従業員選択＋検索
-        from .screens.my_attendance_screen import MyAttendanceScreen
         if isinstance(self.current_screen, MyAttendanceScreen):
-            # my_attendance_screen.py に追加したメソッドを呼ぶ
             self.current_screen.on_search_keyword(kw)
 
     def _on_search_change(self, event: tk.Event):
@@ -301,11 +284,7 @@ class AppShell(ctk.CTkFrame):
         for w in self.search_popup.winfo_children():
             w.destroy()
 
-        outer = ctk.CTkFrame(
-            self.search_popup,
-            corner_radius=16,
-            fg_color="#FFFFFF",
-        )
+        outer = ctk.CTkFrame(self.search_popup, corner_radius=16, fg_color="#FFFFFF")
         outer.pack(fill="both", expand=True)
 
         header_row = ctk.CTkFrame(outer, fg_color="#FFFFFF")
@@ -330,17 +309,10 @@ class AppShell(ctk.CTkFrame):
         )
 
         ctk.CTkLabel(
-            outer,
-            text="ユーザー",
-            font=("Meiryo UI", 11),
-            text_color="#6B7280",
+            outer, text="ユーザー", font=("Meiryo UI", 11), text_color="#6B7280"
         ).pack(anchor="w", padx=14, pady=(2, 4))
 
-        list_container = ctk.CTkScrollableFrame(
-            outer,
-            fg_color="#FFFFFF",
-            corner_radius=0,
-        )
+        list_container = ctk.CTkScrollableFrame(outer, fg_color="#FFFFFF", corner_radius=0)
         list_container.pack(fill="both", expand=True, padx=4, pady=(0, 6))
 
         for r in matches:
@@ -407,8 +379,7 @@ class AppShell(ctk.CTkFrame):
             return
 
         self.profile_menu = tk.Toplevel(self)
-        self.profile_menu.withdraw()
-        self.profile_menu.withdraw()
+        self.profile_menu.withdraw()  # ← 1回だけでOK
         self.profile_menu.overrideredirect(True)
         self.profile_menu.attributes("-topmost", True)
 
@@ -426,55 +397,32 @@ class AppShell(ctk.CTkFrame):
         info_frame.pack(fill="x", padx=12, pady=(12, 8))
 
         ctk.CTkLabel(
-            info_frame,
-            text=f"👤 {name}",
-            font=("Meiryo UI", 14, "bold"),
-            text_color="#111",
+            info_frame, text=f"👤 {name}", font=("Meiryo UI", 14, "bold"), text_color="#111"
         ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
 
         label_width = 60
 
-        ctk.CTkLabel(
-            info_frame,
-            text="ID",
-            width=label_width,
-            anchor="center",
-            font=("Meiryo UI", 12),
-        ).grid(row=1, column=0, sticky="w", pady=2)
-        ctk.CTkLabel(
-            info_frame,
-            text="：",
-            width=10,
-            font=("Meiryo UI", 12),
-        ).grid(row=1, column=1, sticky="w", pady=2)
-        ctk.CTkLabel(
-            info_frame,
-            text=user.get("username", "-"),
-            font=("Meiryo UI", 12),
-        ).grid(row=1, column=2, sticky="w", pady=2)
-
-        ctk.CTkLabel(
-            info_frame,
-            text="権限",
-            width=label_width,
-            anchor="center",
-            font=("Meiryo UI", 12),
-        ).grid(row=2, column=0, sticky="w", pady=2)
-        ctk.CTkLabel(
-            info_frame,
-            text="：",
-            width=10,
-            font=("Meiryo UI", 12),
-        ).grid(row=2, column=1, sticky="w", pady=2)
-        ctk.CTkLabel(
-            info_frame,
-            text=role_label,
-            font=("Meiryo UI", 12),
-        ).grid(row=2, column=2, sticky="w", pady=2)
-
-        ctk.CTkFrame(outer, height=1, fg_color="#E5E7EB").pack(
-            fill="x", padx=8, pady=(4, 4)
+        ctk.CTkLabel(info_frame, text="ID", width=label_width, anchor="center", font=("Meiryo UI", 12)).grid(
+            row=1, column=0, sticky="w", pady=2
         )
+        ctk.CTkLabel(info_frame, text="：", width=10, font=("Meiryo UI", 12)).grid(
+            row=1, column=1, sticky="w", pady=2
+        )
+        ctk.CTkLabel(info_frame, text=user.get("username", "-"), font=("Meiryo UI", 12)).grid(
+            row=1, column=2, sticky="w", pady=2
+        )
+
+        ctk.CTkLabel(info_frame, text="権限", width=label_width, anchor="center", font=("Meiryo UI", 12)).grid(
+            row=2, column=0, sticky="w", pady=2
+        )
+        ctk.CTkLabel(info_frame, text="：", width=10, font=("Meiryo UI", 12)).grid(
+            row=2, column=1, sticky="w", pady=2
+        )
+        ctk.CTkLabel(info_frame, text=role_label, font=("Meiryo UI", 12)).grid(
+            row=2, column=2, sticky="w", pady=2
+        )
+
+        ctk.CTkFrame(outer, height=1, fg_color="#E5E7EB").pack(fill="x", padx=8, pady=(4, 4))
 
         logout_btn = ctk.CTkButton(
             outer,
@@ -540,23 +488,13 @@ class AppShell(ctk.CTkFrame):
         self._destroy_search_popup()
 
     def _select_search_result(self, record: dict):
-        """
-        サジェスト候補（1件の勤怠レコード）がクリックされたときの処理。
-        MY勤怠画面に遷移し、そのレコードの日付で 1 日分を表示する。
-        """
         name = record.get("name", "")
         self.search_var.set(name)
-
-        # サジェストを閉じる
         self._destroy_search_popup()
-
-        # ★ MY勤怠画面へ遷移
         self.show("my")
 
         from .screens.my_attendance_screen import MyAttendanceScreen
         if isinstance(self.current_screen, MyAttendanceScreen):
-            # レコード情報（ts / employee_code / name）から
-            # 従業員 + 日付を決めて 1 日分を検索
             self.current_screen.on_search_from_record(record)
 
     def _clear_search(self):
@@ -573,16 +511,14 @@ class AppShell(ctk.CTkFrame):
     def _build_admin_subnav(self):
         self._clear_subnav()
         ctk.CTkLabel(
-            self.subnav,
-            text="🛠 管理者メニュー",
-            font=("Meiryo UI", 14, "bold"),
+            self.subnav, text="🛠 管理者メニュー", font=("Meiryo UI", 14, "bold")
         ).pack(padx=8, pady=(6, 4), anchor="w")
 
         role = (self.current_admin or {}).get("role", "admin")
 
         admin_btn_style = dict(
             width=self.NAV_WIDTH - 50,
-            height=34,
+            height=30,  # ← 小型化に合わせる
             corner_radius=8,
             anchor="center",
             font=("Meiryo UI", 13),
@@ -608,14 +544,11 @@ class AppShell(ctk.CTkFrame):
 
         from .screens.employee_register_screen import EmployeeRegisterScreen
         from .screens.camera_settings_screen import CameraSettingsScreen
-        from .screens.admin_account_register_screen import (
-            AdminAccountRegisterScreen,
-        )
+        from .screens.admin_account_register_screen import AdminAccountRegisterScreen
         from .screens.face_data_screen import FaceDataScreen
         from .screens.shift_editor_screen import ShiftEditorScreen
-        from .screens.employee_su_overview_screen import (
-            EmployeeSuOverviewScreen,
-        )
+        from .screens.shift_weekly_review_screen import ShiftWeeklyReviewScreen
+        from .screens.employee_su_overview_screen import EmployeeSuOverviewScreen
 
         ctk.CTkButton(
             self.subnav,
@@ -633,9 +566,7 @@ class AppShell(ctk.CTkFrame):
             self.subnav,
             text="🔐 管理者アカウント",
             command=lambda: self._swap_right(
-                lambda parent: AdminAccountRegisterScreen(
-                    parent, self.current_admin
-                )
+                lambda parent: AdminAccountRegisterScreen(parent, self.current_admin)
             ),
             **admin_btn_style,
         ).pack(padx=8, pady=4)
@@ -649,6 +580,12 @@ class AppShell(ctk.CTkFrame):
             self.subnav,
             text="🗓 シフト作成 / 編集",
             command=lambda: self._swap_right(ShiftEditorScreen),
+            **admin_btn_style,
+        ).pack(padx=8, pady=4)
+        ctk.CTkButton(
+            self.subnav,
+            text="🗂 提出シフト",
+            command=lambda: self._swap_right(ShiftWeeklyReviewScreen),
             **admin_btn_style,
         ).pack(padx=8, pady=4)
         ctk.CTkButton(
@@ -686,11 +623,9 @@ class AppShell(ctk.CTkFrame):
         for child in self.body.winfo_children():
             child.destroy()
 
-        # --- 管理者状態の扱い ---------------------------------
+        # --- 管理者状態の扱い ---
         if self.dev_skip_admin_login:
-            # 開発モード：管理者ログイン状態とサブナビは維持する
             if self.current_admin is None:
-                # 念のため、未設定なら dev 管理者で埋める
                 self.current_admin = {
                     "username": "dev_admin",
                     "name": "開発用管理者",
@@ -698,23 +633,21 @@ class AppShell(ctk.CTkFrame):
                 }
                 self._build_admin_subnav()
         else:
-            # 本番モード：admin 以外に遷移したときはログアウト扱い
             self._clear_subnav()
             if key != "admin":
                 self.current_admin = None
                 self._destroy_profile_menu()
 
-        # --- 履歴管理（元のまま） ---------------------------
+        # --- 履歴管理 ---
         if not self._is_history_nav:
             if self.hist_idx < len(self.history) - 1:
                 self.history = self.history[: self.hist_idx + 1]
             self.history.append(key)
             self.hist_idx = len(self.history) - 1
 
-        # --- 画面切り替え -------------------------------------
+        # --- 画面切り替え ---
         if key == "admin":
             if self.dev_skip_admin_login:
-                # ★ 開発モード：常に管理者トップ（従業員登録）へ
                 if self.current_admin is None:
                     self.current_admin = {
                         "username": "dev_admin",
@@ -722,28 +655,20 @@ class AppShell(ctk.CTkFrame):
                         "role": "su",
                     }
                     self._build_admin_subnav()
-
                 from .screens.employee_register_screen import EmployeeRegisterScreen
                 screen = EmployeeRegisterScreen(self.body)
-
             else:
-                # ★ 本番モード：ログイン画面から入る
                 def to_menu(user):
                     self.current_admin = user
                     self._build_admin_subnav()
                     if user.get("role") == "su":
-                        from .screens.employee_register_screen import (
-                            EmployeeRegisterScreen,
-                        )
+                        from .screens.employee_register_screen import EmployeeRegisterScreen
                         self._swap_right(EmployeeRegisterScreen)
                     else:
                         from .screens.face_data_screen import FaceDataScreen
                         self._swap_right(FaceDataScreen)
 
-                screen = AdminLoginScreen(
-                    self.body,
-                    switch_to_menu_callback=to_menu,
-                )
+                screen = AdminLoginScreen(self.body, switch_to_menu_callback=to_menu)
 
         elif key == "home":
             screen = HomeScreen(self.body)
@@ -752,8 +677,7 @@ class AppShell(ctk.CTkFrame):
             screen = FaceClockScreen(self.body)
 
         elif key == "list":
-            # 📑 ボタンで「勤怠一覧」を開きたい前提に戻しています
-            screen = ShiftSubmitScreen(self.body)
+            screen = ShiftSubmitScreen(self.body)  # 従業員のシフト提出
 
         elif key == "my":
             screen = MyAttendanceScreen(self.body)
@@ -769,20 +693,23 @@ class AppShell(ctk.CTkFrame):
 
 
 def run_app(cfg: dict):
+    # 見た目統一
     ctk.set_appearance_mode("light")
     ctk.set_default_color_theme("blue")
     ctk.set_widget_scaling(1.0)
     ctk.set_window_scaling(1.0)
 
+    # ルート
     root = ctk.CTk()
     root.title(cfg.get("app_name", "Kao-Kintai"))
-
     root.grid_rowconfigure(0, weight=1)
     root.grid_columnconfigure(0, weight=1)
 
+    # シェル
     shell = AppShell(master=root, cfg=cfg)
     shell.grid(row=0, column=0, sticky="nsew")
 
+    # 最大化
     def _maximize_window():
         if os.name == "nt":
             root.state("zoomed")
@@ -792,6 +719,7 @@ def run_app(cfg: dict):
 
     root.after(100, _maximize_window)
 
+    # 履歴ショートカット
     root.bind("<Control-Left>", lambda e: shell._hist(-1))
     root.bind("<Control-Right>", lambda e: shell._hist(+1))
 
