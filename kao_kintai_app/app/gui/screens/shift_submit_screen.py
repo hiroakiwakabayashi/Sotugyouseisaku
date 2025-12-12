@@ -15,6 +15,7 @@ from app.infra.db.shift_repo import ShiftRepo
 _COMPACT = re.compile(r"^\d{3,4}$")      # 600 / 0900 / 1730
 _HHMM = re.compile(r"^\d{2}:\d{2}$")     # 06:00 / 17:30
 
+
 def _from_db_to_compact(hhmm: str) -> str:
     """'HH:MM' → 'HMM/HHMM'（先頭0を落としてコロン無し）"""
     if not _HHMM.match(hhmm):
@@ -22,6 +23,7 @@ def _from_db_to_compact(hhmm: str) -> str:
     hh, mm = hhmm.split(":")
     h = str(int(hh))  # 先頭ゼロ除去（'00'→'0'）
     return f"{h}{mm}"
+
 
 def _compact_to_hhmm(s: str) -> str | None:
     """
@@ -40,6 +42,7 @@ def _compact_to_hhmm(s: str) -> str | None:
         return None
     return f"{hh:02d}:{mm:02d}"
 
+
 def _lt_hhmm(a: str, b: str) -> bool:
     """a < b を 'HH:MM' で判定（双方とも 'HH:MM' 前提）"""
     ah, am = map(int, a.split(":"))
@@ -50,11 +53,14 @@ def _lt_hhmm(a: str, b: str) -> bool:
 class ShiftSubmitScreen(ctk.CTkFrame):
     """
     従業員が週次でシフトを「希望提出」する画面。
-    - 入力形式は HHMM（コロン無し）。例: 600, 900, 1730
-    - 第1希望 IN/OUT（必須扱いではないが、両方埋まっていないと登録しない）
-    - 第2希望 IN/OUT（任意。両方埋まっているときだけ登録）
-    - DB保存時は 'HH:MM' に正規化して保存
+    - 入力形式は 数字（600, 930, 1730 など）
+    - フォーカスアウト or Enter で 'HH:MM' に自動整形
+    - 7日分がスクロール無しで1画面に入るように調整
     """
+
+    # ★ 列幅を固定してズレをなくす
+    DATE_COL_WIDTH = 200   # 日付列の固定幅（px）
+    TIME_ENTRY_WIDTH = 96  # 各 HHMM エントリの幅
 
     def __init__(self, master):
         super().__init__(master)
@@ -106,19 +112,19 @@ class ShiftSubmitScreen(ctk.CTkFrame):
         next_btn.grid(row=0, column=3, padx=6, pady=6)
         self.week_label.grid(row=0, column=4, padx=6, pady=6, sticky="w")
 
-        # ===== 行コンテナ（ヘッダ＋7日分） =====
-        self.rows = ctk.CTkScrollableFrame(self, corner_radius=10)
-        self.rows.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 8))
+        # ===== 行コンテナ（通常の Frame：スクロール無し） =====
+        self.rows = ctk.CTkFrame(self, corner_radius=10, fg_color="#F3F4F6")
+        self.rows.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 4))
 
-        # 0:日付, 1:第1IN, 2:第1OUT, 3:第2IN, 4:第2OUT, 5:メモ
-        self.rows.grid_columnconfigure(0, weight=0, minsize=150)
+        # ヘッダー用の列幅（親フレーム側）
+        self.rows.grid_columnconfigure(0, weight=0, minsize=self.DATE_COL_WIDTH)
         for col in (1, 2, 3, 4):
             self.rows.grid_columnconfigure(col, weight=0, minsize=110)
         self.rows.grid_columnconfigure(5, weight=1)
 
         # 操作用ボタン
         foot = ctk.CTkFrame(self)
-        foot.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 16))
+        foot.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 10))
         foot.grid_columnconfigure(0, weight=1)
         ctk.CTkButton(
             foot,
@@ -152,6 +158,23 @@ class ShiftSubmitScreen(ctk.CTkFrame):
         e = self.week_start + timedelta(days=6)
         return f"{s.strftime('%Y/%m/%d')} 〜 {e.strftime('%Y/%m/%d')}"
 
+    # ===== 時刻エントリ用：自動コロン挿入 =====
+    def _auto_colon(self, widget: tk.Entry | ctk.CTkEntry):
+        txt = widget.get().strip()
+        if not txt:
+            return
+        # 既に HH:MM なら何もしない
+        if _HHMM.match(txt):
+            return
+        hhmm = _compact_to_hhmm(txt)
+        if hhmm:
+            widget.delete(0, tk.END)
+            widget.insert(0, hhmm)
+
+    def _attach_time_entry_behaviors(self, entry: ctk.CTkEntry):
+        """時刻入力エントリに共通の挙動を付与（フォーカスアウト時に自動フォーマット）"""
+        entry.bind("<FocusOut>", lambda e, w=entry: self._auto_colon(w))
+
     # ---------------- 行構築 ----------------
     def _build_week_rows(self):
         # クリア
@@ -161,53 +184,179 @@ class ShiftSubmitScreen(ctk.CTkFrame):
         # 週ラベル更新
         self.week_label.configure(text=self._week_label_text())
 
-        # ==== ヘッダ行（row=0）====
+        # ヘッダ行（row=0）
         header_titles = ["日付", "第1希望 IN", "第1希望 OUT", "第2希望 IN", "第2希望 OUT", "メモ"]
         for col, text in enumerate(header_titles):
-            ctk.CTkLabel(
-                self.rows,
-                text=text,
-                font=("Meiryo UI", 13, "bold"),
-                text_color="#4B5563",
-            ).grid(row=0, column=col, padx=6, pady=(6, 4), sticky="w")
+            if col == 0:
+                ctk.CTkLabel(
+                    self.rows,
+                    text=text,
+                    font=("Meiryo UI", 13, "bold"),
+                    text_color="#4B5563",
+                    width=self.DATE_COL_WIDTH,
+                    anchor="w",
+                ).grid(row=0, column=col, padx=6, pady=(4, 4), sticky="w")
+            else:
+                ctk.CTkLabel(
+                    self.rows,
+                    text=text,
+                    font=("Meiryo UI", 13, "bold"),
+                    text_color="#4B5563",
+                ).grid(row=0, column=col, padx=(18,18), pady=(4, 4), sticky="w")
 
         # 行エディット用保持: {date_str: {...widgets}}
         self._editors: dict[str, dict[str, ctk.CTkEntry]] = {}
+        # キー移動用マトリクス [7日][5列]
+        self._entry_matrix: list[list[ctk.CTkEntry]] = []
 
         # 7日分作成（row=1〜7）
         for i in range(7):
             d = self.week_start + timedelta(days=i)
-            self._add_day_row(d, row_index=i + 1)
+            row_entries = self._add_day_row(d, row_index=i + 1)
+            self._entry_matrix.append(row_entries)
+
+        # 行全体が下の余白まで広がるように、1〜7行に重みを付ける
+        for i in range(1, 8):
+            self.rows.grid_rowconfigure(i, weight=1)
+
+        # キーバインド設定（矢印キー & Enter）
+        self._bind_entry_keys()
 
         # 既存データを反映
         self._fill_from_db()
 
-    def _add_day_row(self, day: date, row_index: int):
+    def _add_day_row(self, day: date, row_index: int) -> list[ctk.CTkEntry]:
+        """
+        1 日分の行をコンパクトなフレームにまとめて作成。
+        rows(row=row_index) に row_frame を 1 行だけ置いて、その中を横並びにする。
+        """
         dstr = day.strftime("%Y-%m-%d")
-        editors = {}
+        editors: dict[str, ctk.CTkEntry] = {}
         self._editors[dstr] = editors
+
+        # 行コンテナ（ゼブラ柄）
+        zebra_color = "#EEF2FF" if row_index % 2 == 1 else "#F9FAFB"
+        row_frame = ctk.CTkFrame(self.rows, fg_color=zebra_color, corner_radius=6)
+        row_frame.grid(
+            row=row_index,
+            column=0,
+            columnspan=6,
+            sticky="ew",
+            padx=4,
+            pady=(3, 3),
+        )
+
+        # 行内の列幅（ここでも同じ幅を固定）
+        row_frame.grid_columnconfigure(0, weight=0, minsize=self.DATE_COL_WIDTH)
+        for col in (1, 2, 3, 4):
+            row_frame.grid_columnconfigure(col, weight=0, minsize=110)
+        row_frame.grid_columnconfigure(5, weight=1)
 
         # 日付ラベル
         ctk.CTkLabel(
-            self.rows,
+            row_frame,
             text=day.strftime("%Y-%m-%d (%a)"),
             font=("Meiryo UI", 13, "bold"),
             text_color="#111827",
-        ).grid(row=row_index, column=0, padx=6, pady=4, sticky="w")
+            width=self.DATE_COL_WIDTH,
+            anchor="w",
+        ).grid(row=0, column=0, padx=6, pady=6, sticky="w")
 
         # エントリ生成ヘルパ（placeholder は HHMM）
-        def _mk_entry(col: int, placeholder: str = "HHMM", width: int = 96):
-            e = ctk.CTkEntry(self.rows, placeholder_text=placeholder, width=width)
-            e.grid(row=row_index, column=col, padx=6, pady=4, sticky="w")
+        def _mk_entry(col: int, placeholder: str = "HHMM", width: int = None):
+            e = ctk.CTkEntry(
+                row_frame,
+                placeholder_text=placeholder,
+                width=width or self.TIME_ENTRY_WIDTH,
+                height=30,
+            )
+            e.grid(row=0, column=col, padx=6, pady=6, sticky="w")
+            # 時刻欄には自動コロン挿入を付与
+            if placeholder == "HHMM":
+                self._attach_time_entry_behaviors(e)
             return e
 
         editors["in1"] = _mk_entry(1)
         editors["out1"] = _mk_entry(2)
         editors["in2"] = _mk_entry(3)
         editors["out2"] = _mk_entry(4)
-        editors["note"] = ctk.CTkEntry(self.rows, placeholder_text="メモ（任意）", width=260)
-        editors["note"].grid(row=row_index, column=5, padx=6, pady=4, sticky="ew")
 
+        editors["note"] = ctk.CTkEntry(
+            row_frame,
+            placeholder_text="メモ（任意）",
+            width=420,
+            height=30,
+        )
+        editors["note"].grid(row=0, column=5, padx=6, pady=6, sticky="ew")
+
+        # 行ごとのエントリ配列（キー移動用）
+        return [
+            editors["in1"],
+            editors["out1"],
+            editors["in2"],
+            editors["out2"],
+            editors["note"],
+        ]
+
+    # ---------- キー移動 ----------
+    def _bind_entry_keys(self):
+        rows = len(self._entry_matrix)
+        cols = 5
+        for r in range(rows):
+            for c in range(cols):
+                w = self._entry_matrix[r][c]
+                if not w:
+                    continue
+
+                # Enter は「コロン整形 → 右へ移動」
+                w.bind(
+                    "<Return>",
+                    lambda e, rr=r, cc=c: (
+                        self._auto_colon(e.widget),
+                        self._move_focus(rr, cc, "RIGHT"),
+                    ),
+                )
+                w.bind("<Right>",  lambda e, rr=r, cc=c: self._move_focus(rr, cc, "RIGHT"))
+                w.bind("<Left>",   lambda e, rr=r, cc=c: self._move_focus(rr, cc, "LEFT"))
+                w.bind("<Up>",     lambda e, rr=r, cc=c: self._move_focus(rr, cc, "UP"))
+                w.bind("<Down>",   lambda e, rr=r, cc=c: self._move_focus(rr, cc, "DOWN"))
+
+    def _move_focus(self, r: int, c: int, direction: str):
+        rows = len(self._entry_matrix)
+        cols = 5
+
+        nr, nc = r, c
+        if direction == "RIGHT":
+            if c < cols - 1:
+                nc = c + 1
+            else:
+                # 行末 → 次の行の一番左
+                if r < rows - 1:
+                    nr = r + 1
+                    nc = 0
+        elif direction == "LEFT":
+            if c > 0:
+                nc = c - 1
+            else:
+                if r > 0:
+                    nr = r - 1
+                    nc = cols - 1
+        elif direction == "UP":
+            if r > 0:
+                nr = r - 1
+        elif direction == "DOWN":
+            if r < rows - 1:
+                nr = r + 1
+
+        target = self._entry_matrix[nr][nc]
+        if target:
+            target.focus_set()
+            try:
+                target.icursor(tk.END)
+            except Exception:
+                pass
+
+    # ---------------- 既存データ反映 ----------------
     def _fill_from_db(self):
         code = self._selected_code()
         if not code:
@@ -264,8 +413,8 @@ class ShiftSubmitScreen(ctk.CTkFrame):
 
             # 第1希望（両方埋まっているときだけ登録対象）
             if in1_raw or out1_raw:
-                in1 = _compact_to_hhmm(in1_raw)
-                out1 = _compact_to_hhmm(out1_raw)
+                in1 = _compact_to_hhmm(in1_raw) or (in1_raw if _HHMM.match(in1_raw) else None)
+                out1 = _compact_to_hhmm(out1_raw) or (out1_raw if _HHMM.match(out1_raw) else None)
                 if not (in1 and out1 and _lt_hhmm(in1, out1)):
                     errors.append(f"{dkey} 第1希望は HHMM / IN<OUT で入力してください。例: 600, 930, 1730")
                 else:
@@ -273,8 +422,8 @@ class ShiftSubmitScreen(ctk.CTkFrame):
 
             # 第2希望（任意／両方埋まっているときだけ登録対象）
             if in2_raw or out2_raw:
-                in2 = _compact_to_hhmm(in2_raw)
-                out2 = _compact_to_hhmm(out2_raw)
+                in2 = _compact_to_hhmm(in2_raw) or (in2_raw if _HHMM.match(in2_raw) else None)
+                out2 = _compact_to_hhmm(out2_raw) or (out2_raw if _HHMM.match(out2_raw) else None)
                 if not (in2 and out2 and _lt_hhmm(in2, out2)):
                     errors.append(f"{dkey} 第2希望は HHMM / IN<OUT で入力してください。例: 600, 930, 1730")
                 else:
