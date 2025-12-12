@@ -584,7 +584,7 @@ class AppShell(ctk.CTkFrame):
         ).pack(padx=8, pady=4)
         ctk.CTkButton(
             self.subnav,
-            text="🗂 提出シフト",
+            text="🗂 提出シフトビュー",
             command=lambda: self._swap_right(ShiftWeeklyReviewScreen),
             **admin_btn_style,
         ).pack(padx=8, pady=4)
