@@ -8,6 +8,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PIL import Image
+import threading  # ★追加（顔データ読込を非同期化）
 
 from app.infra.db.employee_repo import EmployeeRepo
 from app.infra.db.attendance_repo import AttendanceRepo
@@ -61,7 +62,7 @@ class FaceClockScreen(ctk.CTkFrame):
         self.QUALITY_OK_FRAMES = int(vcfg.get("quality_ok_frames", 2))
 
         # 表示用変数
-        self.message_var = tk.StringVar(value="カメラに顔を向けてください。")
+        self.message_var = tk.StringVar(value="起動中…（顔データを読み込みます）")
         self.rec_code_var = tk.StringVar(value="--")
         self.rec_name_var = tk.StringVar(value="--")
 
@@ -78,6 +79,9 @@ class FaceClockScreen(ctk.CTkFrame):
         self.cam_w = 960
         self.cam_h = 540
         self._cam_image: ctk.CTkImage | None = None
+
+        # ★ 顔データ準備フラグ（非同期で読み込み）
+        self._dataset_ready = False
 
         # ===== レイアウト（勤怠一覧と同じ 3 行構成） =====
         # 行: 0=タイトル, 1=ツールバー（薄灰）, 2=メイン（薄灰）
@@ -198,9 +202,7 @@ class FaceClockScreen(ctk.CTkFrame):
             corner_radius=8,
         )
 
-        for i, b in enumerate(
-            (self.btn_in, self.btn_out, self.btn_break, self.btn_back)
-        ):
+        for i, b in enumerate((self.btn_in, self.btn_out, self.btn_break, self.btn_back)):
             # 全ボタン同じ余白にする
             b.grid(row=0, column=i, padx=8, pady=0, sticky="e")
 
@@ -237,7 +239,7 @@ class FaceClockScreen(ctk.CTkFrame):
             fg_color="#E5E7EB",
             corner_radius=6,
             border_width=1,
-            border_color="#D1D5DB"   # ここも同じ色で輪郭
+            border_color="#D1D5DB"
         )
         self.cam_border.grid(
             row=1,
@@ -256,10 +258,9 @@ class FaceClockScreen(ctk.CTkFrame):
         )
         self.preview.pack(padx=8, pady=8)
 
-        # ---- 顔データ読み込み ----
+        # ---- 顔データ（非同期） ----
         self.name_map: dict[str, str] = {}
         self.des_map: dict[str, list[np.ndarray]] = {}
-        self._reload_dataset(initial=True)
 
         # ---- カメラ起動 ----
         self.cap = cv2.VideoCapture(0)
@@ -269,7 +270,26 @@ class FaceClockScreen(ctk.CTkFrame):
 
         # リサイズ連動（中央カラム幅に合わせる）
         self.bind("<Configure>", self._on_resize)
+
+        # ★ 非同期：顔データ読み込み開始（UIを先に表示して固まりを防ぐ）
+        self._update_buttons(can_enable=False)
+        self.after(50, self._start_reload_dataset_async)
+
+        # ループ開始
         self.after(10, self._loop)
+
+    # ---------- 顔データ読み込み：非同期開始 ----------
+    def _start_reload_dataset_async(self):
+        def worker():
+            try:
+                self._reload_dataset(initial=True)
+                self._dataset_ready = True
+                self.after(0, lambda: self.message_var.set("カメラに顔を向けてください。"))
+            except Exception:
+                # 失敗してもUIが固まらないように
+                self._dataset_ready = False
+                self.after(0, lambda: self.message_var.set("顔データの読み込みに失敗しました。"))
+        threading.Thread(target=worker, daemon=True).start()
 
     # ---------- 推定情報（横並びペア） ----------
     def _kv_inline(self, parent, label, var):
@@ -320,6 +340,25 @@ class FaceClockScreen(ctk.CTkFrame):
         ok, frame = self.cap.read()
         if ok:
             annotated, stable_ok, face_rect, gray = self._evaluate_and_draw(frame)
+
+            # ★ 顔データがまだ準備できていない間は、映像表示だけして認識はしない
+            if not self._dataset_ready:
+                self._update_buttons(can_enable=False)
+
+                # カメラ画像を表示
+                rgb = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
+                rgb = cv2.resize(rgb, (self.cam_w, self.cam_h))
+                pil_img = Image.fromarray(rgb)
+                self._cam_image = ctk.CTkImage(
+                    light_image=pil_img,
+                    dark_image=pil_img,
+                    size=(self.cam_w, self.cam_h),
+                )
+                self.preview.configure(image=self._cam_image)
+
+                self.frame_count += 1
+                self._after_id = self.after(30, self._loop)
+                return
 
             # 認識は間引き実行
             if (
@@ -403,7 +442,9 @@ class FaceClockScreen(ctk.CTkFrame):
 
         if len(faces) == 0:
             self._quality_ok_streak = 0
-            self.message_var.set("顔を映してください。（正面・適度な距離）")
+            # 顔データ読み込み中はメッセージを上書きしない（起動中メッセージ優先）
+            if self._dataset_ready:
+                self.message_var.set("顔を映してください。（正面・適度な距離）")
             return frame_bgr, False, None, gray
 
         x, y, fw, fh = max(faces, key=lambda r: r[2] * r[3])
@@ -432,7 +473,7 @@ class FaceClockScreen(ctk.CTkFrame):
             self._quality_ok_streak = 0
 
         stable_ok = self._quality_ok_streak >= self.QUALITY_OK_FRAMES
-        if not stable_ok:
+        if not stable_ok and self._dataset_ready:
             self.message_var.set(" / ".join(msgs) or "調整中…")
 
         color = (0, 200, 0) if stable_ok else (0, 165, 255) if msgs else (0, 200, 255)
