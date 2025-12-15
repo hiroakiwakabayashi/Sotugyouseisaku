@@ -13,3 +13,4 @@ Pillow
 numpy
 tkcalendar
 bcrypt>=4.1.2
+pyinstaller>=6.3
