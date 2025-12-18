@@ -41,49 +41,141 @@ class EmployeeSuOverviewScreen(ctk.CTkFrame):
         ctk.CTkLabel(
             self,
             text="👥 従業員一覧（su・時給編集可）",
-            font=("Meiryo UI", 18, "bold"),
-        ).grid(row=0, column=0, sticky="w", padx=18, pady=(14, 6))
+            font=("Meiryo UI", 22, "bold"),
+        ).grid(row=0, column=0, sticky="w", padx=16, pady=(16, 8))
 
-        # 条件エリア
-        cond = ctk.CTkFrame(self, fg_color="#E0E4EA")
-        cond.grid(row=1, column=0, sticky="ew", padx=18, pady=(0, 10))
-        cond.grid_columnconfigure(10, weight=1)
+        # =========================================================
+        # フィルタエリア（勤怠一覧 / シフト編集 と同じ2段構成）
+        #   1段目：従業員 / 並び / 検索（検索は入力＋ボタンを同じ枠で）
+        #   2段目：保存ボタン（下から上へ移動）
+        # =========================================================
+        filt = ctk.CTkFrame(self)
+        filt.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 4))
+        filt.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(cond, text="検索（コード/氏名）:").grid(
-            row=0, column=0, padx=(12, 4), pady=10, sticky="w"
-        )
-        self.q_var = ctk.StringVar(value="")
-        ctk.CTkEntry(
-            cond,
-            width=260,
-            textvariable=self.q_var,
-            placeholder_text="例）E0001 / 山田",
-        ).grid(row=0, column=1, padx=(0, 20), pady=10, sticky="w")
+        BTN_H = 32
 
-        ctk.CTkLabel(cond, text="並び:", width=50).grid(
-            row=0, column=2, sticky="w"
-        )
+        # -------- 事前に必要な変数（UI生成より先に用意）--------
+        # 従業員ドロップダウン
+        emps = self.repo.list_all()
+        self.emp_values = ["全員"] + [f"{_text(r,'code')} {_text(r,'name')}" for r in emps]
+        self.emp_var = ctk.StringVar(value=self.emp_values[0])
+
+        # 並び
         self.sort_values = ["コード昇順", "氏名昇順", "時給降順"]
         self.sort_var = ctk.StringVar(value=self.sort_values[0])
+
+
+        # ---- 連続変更で何度も_searchが走らないようにまとめて実行 ----
+        self._search_job = None
+
+        def _schedule_search(*_):
+            if self._search_job is not None:
+                try:
+                    self.after_cancel(self._search_job)
+                except Exception:
+                    pass
+            self._search_job = self.after(50, self._search)  # 50ms後に1回だけ実行
+
+        # ★trace_addは「変数を作った後」でないと落ちる
+        self.emp_var.trace_add("write", _schedule_search)
+        self.sort_var.trace_add("write", _schedule_search)
+        
+
+        # 検索文字（コード/氏名）
+        self.q_var = ctk.StringVar(value="")
+
+        # ---------- 1段目：従業員 / 並び / 検索 ----------
+        row1 = ctk.CTkFrame(filt, fg_color="transparent")
+        row1.grid(row=0, column=0, sticky="w")  # ← 左詰め
+
+        PADX = 4
+        PADY = 4
+        LABEL_PAD = (0, 4)
+
+        # 従業員
+        emp_box = ctk.CTkFrame(row1, fg_color="transparent")
+        emp_box.grid(row=0, column=0, sticky="w", padx=PADX, pady=PADY)
+        ctk.CTkLabel(emp_box, text="従業員").pack(side="left", padx=LABEL_PAD)
         ctk.CTkOptionMenu(
-            cond,
+            emp_box,
+            values=self.emp_values,
+            variable=self.emp_var,
+            width=220,
+            command=_schedule_search,   # ★追加：選択変更で反映
+        ).pack(side="left")
+
+        # 並び
+        sort_box = ctk.CTkFrame(row1, fg_color="transparent")
+        sort_box.grid(row=0, column=1, sticky="w", padx=PADX, pady=PADY)
+        ctk.CTkLabel(sort_box, text="並び").pack(side="left", padx=LABEL_PAD)
+        ctk.CTkOptionMenu(
+            sort_box,
             values=self.sort_values,
             variable=self.sort_var,
             width=140,
-        ).grid(row=0, column=3, padx=(0, 20))
+            command=_schedule_search,   # ★追加：選択変更で反映
+        ).pack(side="left")
+
+        # 保存（1段目へ移動）
+        save_btn = ctk.CTkButton(
+            row1,
+            text="💾 選択行の時給を保存",
+            height=BTN_H,
+            width=200,           # ← 好みで 180〜220
+            corner_radius=6,
+            command=self._save_selected_wage,
+        )
+        save_btn.grid(row=0, column=2, sticky="w", padx=PADX, pady=PADY)
+
+
+        """
+        #検索（入力＋検索ボタンを同じ枠で）
+        search_box = ctk.CTkFrame(row1, fg_color="transparent")
+        search_box.grid(row=0, column=2, sticky="w", padx=PADX, pady=PADY)
+        ctk.CTkLabel(search_box, text="検索").pack(side="left", padx=LABEL_PAD)
+
+        q_entry = ctk.CTkEntry(
+            search_box,
+            width=260,
+            textvariable=self.q_var,
+            placeholder_text="例）E0001 / 山田",
+        )
+        q_entry.pack(side="left")
 
         ctk.CTkButton(
-            cond, text="検索", width=90, command=self._search
-        ).grid(row=0, column=4, padx=(0, 10))
-        ctk.CTkButton(
-            cond, text="CSV出力", width=90, command=self._export_csv
-        ).grid(row=0, column=5)
+            search_box,
+            text="検索",
+            height=BTN_H,
+            width=90,
+            command=self._search,
+        ).pack(side="left", padx=(6, 0))
+
+        # Enterでも検索できるように
+        q_entry.bind("<Return>", lambda e: self._search())
+        """
 
         # 一覧エリア
         body = ctk.CTkFrame(self)
         body.grid(row=2, column=0, sticky="nsew", padx=18)
         body.grid_columnconfigure(0, weight=1)
         body.grid_rowconfigure(2, weight=1)
+
+        # ---------------- body下：左に集計、右にCSV（勤怠一覧のmetaと同じ役割） ----------------
+        meta = ctk.CTkFrame(self)
+        meta.grid(row=3, column=0, sticky="ew", padx=16, pady=(4, 12))
+        meta.grid_columnconfigure(0, weight=1)
+
+        self.summary = ctk.CTkLabel(meta, text="—", anchor="w")
+        self.summary.pack(side="left", padx=6)
+
+        ctk.CTkButton(
+            meta,
+            text="CSV出力",
+            command=self._export_csv,
+            width=120,
+        ).pack(side="right", padx=4)
+
 
         # ヘッダー
         head = ctk.CTkFrame(body, fg_color="#D8DEE6", corner_radius=10)
@@ -132,17 +224,6 @@ class EmployeeSuOverviewScreen(ctk.CTkFrame):
         self.scroll.grid(row=2, column=0, sticky="nsew")
         self.scroll.grid_columnconfigure(0, weight=1)
 
-        # 下部ボタン
-        ops = ctk.CTkFrame(self)
-        ops.grid(row=3, column=0, sticky="ew", padx=18, pady=10)
-        ctk.CTkButton(
-            ops,
-            text="💾 選択行の時給を保存",
-            command=self._save_selected_wage,
-        ).pack(side="left")
-
-        self.summary = ctk.CTkLabel(self, text="—", anchor="w")
-        self.summary.grid(row=4, column=0, sticky="ew", padx=18, pady=(0, 12))
 
         self._rows_widgets: List[ctk.CTkBaseClass] = []
         self._row_models: List[Dict] = []
@@ -227,6 +308,14 @@ class EmployeeSuOverviewScreen(ctk.CTkFrame):
 
     # ===== 検索・並び替え =====
     def _filter_sort(self, items):
+        # 従業員（全員以外ならコード一致で絞り込み）
+        v = self.emp_var.get().strip()
+        if v and v != "全員":
+            # "E0001 山田" 形式の先頭がコード
+            code = v.split(" ", 1)[0].strip()
+            items = [r for r in items if str(r.get("code", "")).strip() == code]
+
+        # 検索（コード/氏名の部分一致）
         q = self.q_var.get().strip().lower()
         if q:
             items = [
