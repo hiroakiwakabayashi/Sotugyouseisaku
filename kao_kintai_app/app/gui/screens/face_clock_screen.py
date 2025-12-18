@@ -9,11 +9,18 @@ import cv2
 import numpy as np
 from PIL import Image
 import threading  # ★追加（顔データ読込を非同期化）
+import sys  # ← 追加
+
 
 from app.infra.db.employee_repo import EmployeeRepo
 from app.infra.db.attendance_repo import AttendanceRepo
 from app.services.attendance_service import AttendanceService
 from app.services.config_service import ConfigService
+
+def _app_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[3]
 
 
 class FaceClockScreen(ctk.CTkFrame):
@@ -518,7 +525,7 @@ class FaceClockScreen(ctk.CTkFrame):
         for r in self.emp_repo.list_all():
             self.name_map[r["code"]] = r["name"]
 
-        root = Path(__file__).resolve().parents[3] / "data" / "faces"
+        root = _app_root() / "data" / "faces"
         root.mkdir(parents=True, exist_ok=True)
 
         for code in self.name_map.keys():
