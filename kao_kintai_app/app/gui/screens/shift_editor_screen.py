@@ -159,17 +159,10 @@ class ShiftEditorScreen(ctk.CTkFrame):
 
         # ---------- 1段目：従業員 / 開始日 / 終了日 ----------
         row1 = ctk.CTkFrame(filt, fg_color="transparent")
-        row1.grid(row=0, column=0, sticky="ew")
-
-        # ★ 左に詰める：列の weight を 0 に（余白で広がらない）
-        for c in range(3):
-            row1.grid_columnconfigure(c, weight=0)
-
-        # ★ 右側に余り幅を逃がす「ダミー列」
-        row1.grid_columnconfigure(3, weight=1)
+        row1.grid(row=0, column=0, sticky="w")
 
         # ★ 間隔を狭める（4→2）
-        PADX = 2
+        PADX = 10
         PADY = 4
         LABEL_PAD = (0, 4)
 
