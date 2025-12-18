@@ -132,61 +132,89 @@ class ShiftEditorScreen(ctk.CTkFrame):
             font=("Meiryo UI", 22, "bold"),
         ).grid(row=0, column=0, sticky="w", padx=16, pady=(16, 8))
 
-        # ===== 条件 =====
-        filt_bg = ctk.CTkFrame(self, fg_color="#E5E7EB")
-        filt_bg.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 8))
-        filt_bg.grid_columnconfigure(0, weight=1)
+        # =========================
+        # フィルタ用の変数（UI生成より先に必ず作る）
+        # =========================
 
-        filt = ctk.CTkFrame(filt_bg, fg_color="transparent")
-        filt.grid(row=0, column=0, sticky="ew", padx=4, pady=4)
-        filt.grid_columnconfigure(0, weight=1)
-
-        # 1段目：従業員 / 日付
-        row1 = ctk.CTkFrame(filt, fg_color="transparent")
-        row1.grid(row=0, column=0, sticky="ew")
-        for c in range(3):
-            row1.grid_columnconfigure(c, weight=1)
-
-        # 従業員
-        emp_box = ctk.CTkFrame(row1, fg_color="transparent")
-        emp_box.grid(row=0, column=0, sticky="w", padx=4)
-        ctk.CTkLabel(emp_box, text="従業員").pack(side="left")
+        # 従業員候補
         self.emp_values = ["(全員)"] + [
             f'{r["code"]}:{r["name"]}' for r in self.emp_repo.list_all()
         ]
         self.emp_var = ctk.StringVar(value=self.emp_values[0])
-        ctk.CTkOptionMenu(emp_box, values=self.emp_values, variable=self.emp_var, width=220)\
-            .pack(side="left", padx=4)
 
-        # 開始日
+        # 期間（初期値：今週）
         s0, e0 = _week_range_str()
         self.start_var = ctk.StringVar(value=s0)
-        start_box = ctk.CTkFrame(row1, fg_color="transparent")
-        start_box.grid(row=0, column=1, sticky="w", padx=4)
-        ctk.CTkLabel(start_box, text="開始日").pack(side="left")
-        DatePickerEntry(start_box, textvariable=self.start_var).pack(side="left")
-
-        # 終了日
         self.end_var = ctk.StringVar(value=e0)
-        end_box = ctk.CTkFrame(row1, fg_color="transparent")
-        end_box.grid(row=0, column=2, sticky="w", padx=4)
-        ctk.CTkLabel(end_box, text="終了日").pack(side="left")
-        DatePickerEntry(end_box, textvariable=self.end_var).pack(side="left")
 
-        # 2段目：ボタン
+
+        # =========================================================
+        # フィルタエリア（勤怠一覧と同一UI構造：2段・均等配置）
+        # =========================================================
+        filt = ctk.CTkFrame(self)
+        filt.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 8))
+        filt.grid_columnconfigure(0, weight=1)
+
+        BTN_H = 32  # 勤怠一覧と同じ
+
+        # ---------- 1段目：従業員 / 開始日 / 終了日 ----------
+        row1 = ctk.CTkFrame(filt, fg_color="transparent")
+        row1.grid(row=0, column=0, sticky="ew")
+
+        # ★ 左に詰める：列の weight を 0 に（余白で広がらない）
+        for c in range(3):
+            row1.grid_columnconfigure(c, weight=0)
+
+        # ★ 右側に余り幅を逃がす「ダミー列」
+        row1.grid_columnconfigure(3, weight=1)
+
+        # ★ 間隔を狭める（4→2）
+        PADX = 2
+        PADY = 4
+        LABEL_PAD = (0, 4)
+
+        # 従業員（col=0）
+        emp_box = ctk.CTkFrame(row1, fg_color="transparent")
+        emp_box.grid(row=0, column=0, sticky="w", padx=PADX, pady=PADY)
+        ctk.CTkLabel(emp_box, text="従業員").pack(side="left", padx=LABEL_PAD)
+        ctk.CTkOptionMenu(
+            emp_box,
+            values=self.emp_values,
+            variable=self.emp_var,
+            width=220,
+        ).pack(side="left")
+
+        # 開始日（col=1）
+        start_box = ctk.CTkFrame(row1, fg_color="transparent")
+        start_box.grid(row=0, column=1, sticky="w", padx=PADX, pady=PADY)
+        ctk.CTkLabel(start_box, text="開始日").pack(side="left", padx=LABEL_PAD)
+        DatePickerEntry(start_box, textvariable=self.start_var, width=130).pack(side="left")
+
+        # 終了日（col=2）
+        end_box = ctk.CTkFrame(row1, fg_color="transparent")
+        end_box.grid(row=0, column=2, sticky="w", padx=PADX, pady=PADY)
+        ctk.CTkLabel(end_box, text="終了日").pack(side="left", padx=LABEL_PAD)
+        DatePickerEntry(end_box, textvariable=self.end_var, width=130).pack(side="left")
+        
+        # ---------- 2段目：クイックボタン列（均等5分割） ----------
         row2 = ctk.CTkFrame(filt, fg_color="transparent")
         row2.grid(row=1, column=0, sticky="ew")
         for c in range(4):
             row2.grid_columnconfigure(c, weight=1)
 
-        ctk.CTkButton(row2, text="今日", command=self._quick_today)\
-            .grid(row=0, column=0, padx=4, pady=4, sticky="ew")
-        ctk.CTkButton(row2, text="今週", command=self._quick_week)\
-            .grid(row=0, column=1, padx=4, pady=4, sticky="ew")
-        ctk.CTkButton(row2, text="今月", command=self._quick_month)\
-            .grid(row=0, column=2, padx=4, pady=4, sticky="ew")
-        ctk.CTkButton(row2, text="検索", command=self._search)\
-            .grid(row=0, column=3, padx=4, pady=4, sticky="ew")
+        quick_buttons = [
+            ("今日", self._quick_today),
+            ("今週", self._quick_week),
+            ("今月", self._quick_month),
+            ("今年", self._quick_year),
+        ]
+        for col, (label, cmd) in enumerate(quick_buttons):
+            ctk.CTkButton(
+                row2,
+                text=label,
+                height=BTN_H,
+                command=cmd,
+            ).grid(row=0, column=col, padx=4, pady=(2, 4), sticky="ew")
 
         # ===== 一覧エリア（ヘッダー＋カード） =====
         body = ctk.CTkFrame(self)
@@ -317,6 +345,15 @@ class ShiftEditorScreen(ctk.CTkFrame):
         self.end_var.set(e)
         self._search()
 
+    def _quick_year(self):
+        today = date.today()
+        start = date(today.year, 1, 1)
+        end = date(today.year, 12, 31)
+        self.start_var.set(start.strftime("%Y-%m-%d"))
+        self.end_var.set(end.strftime("%Y-%m-%d"))
+        self._search()
+    
+    
     # ===== 行管理 =====
     def _clear_rows(self):
         for r in self._rows:
