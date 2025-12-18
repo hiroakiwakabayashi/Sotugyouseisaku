@@ -414,6 +414,34 @@ class AttendanceListScreen(ctk.CTkFrame):
         win.grid_rowconfigure(2, weight=1)
         win.grid_columnconfigure(0, weight=1)
 
+        # ============================
+        # ★ 前面に出す（背面化対策）
+        # ============================
+        parent = self.winfo_toplevel()          # ルート（AppShell / root）
+        try:
+            win.transient(parent)               # 親に紐づけ（Alt+Tabでも親と一緒に出る）
+        except Exception:
+            pass
+
+        win.lift()                              # スタッキング順を前へ
+        win.focus_force()                       # フォーカスを取る
+
+        # 一瞬だけ最前面化して確実に前に出す（その後解除して通常挙動へ）
+        win.after(10, lambda: win.attributes("-topmost", True))
+        win.after(50, lambda: win.attributes("-topmost", False))
+
+        # モーダルにしたい場合（背面クリックで埋もれるのを防ぐ）
+        win.grab_set()
+
+        def _on_close():
+            try:
+                win.grab_release()
+            except Exception:
+                pass
+            win.destroy()
+
+        win.protocol("WM_DELETE_WINDOW", _on_close)
+
         # ヘッダ
         head = ctk.CTkFrame(win, height=46)
         head.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 4))
