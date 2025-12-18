@@ -167,6 +167,7 @@ class AttendanceListScreen(ctk.CTkFrame):
             row1,
             text="検索",
             height=BTN_H,
+            font=("Meiryo UI", 15, "bold"),
             command=self.search,
         ).grid(row=0, column=3, padx=4, pady=4, sticky="ew")
 
@@ -188,6 +189,7 @@ class AttendanceListScreen(ctk.CTkFrame):
                 row2,
                 text=label,
                 height=BTN_H,
+                font=("Meiryo UI", 15, "bold"),
                 command=cmd,
             ).grid(row=0, column=col, padx=4, pady=(2, 4), sticky="ew")
 
