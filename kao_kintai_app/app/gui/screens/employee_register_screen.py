@@ -6,6 +6,10 @@ from app.infra.db.employee_repo import EmployeeRepo
 
 
 class EmployeeRegisterScreen(ctk.CTkFrame):
+    BTN_FONT = ("Meiryo UI", 15, "bold")
+    BTN_HEIGHT = 36
+    BTN_RADIUS = 8
+
     def __init__(self, master):
         super().__init__(master)
         self.repo = EmployeeRepo()
@@ -83,31 +87,49 @@ class EmployeeRegisterScreen(ctk.CTkFrame):
             btns,
             text="新規",
             command=self.on_new,
+            font=self.BTN_FONT,
+            height=self.BTN_HEIGHT,
+            corner_radius=self.BTN_RADIUS,
         ).grid(row=0, column=0, padx=6, pady=6, sticky="ew")
 
         ctk.CTkButton(
             btns,
             text="保存（新規/更新）",
             command=self.on_save,
+            font=self.BTN_FONT,
+            height=self.BTN_HEIGHT,
+            corner_radius=self.BTN_RADIUS,
         ).grid(row=0, column=1, padx=6, pady=6, sticky="ew")
 
         ctk.CTkButton(
             btns,
             text="有効化",
             command=lambda: self.on_toggle_active(True),
+            font=self.BTN_FONT,
+            height=self.BTN_HEIGHT,
+            corner_radius=self.BTN_RADIUS,
         ).grid(row=0, column=2, padx=6, pady=6, sticky="ew")
 
         ctk.CTkButton(
             btns,
             text="無効化",
             command=lambda: self.on_toggle_active(False),
+            font=self.BTN_FONT,
+            height=self.BTN_HEIGHT,
+            corner_radius=self.BTN_RADIUS,
+            fg_color="#E74C3C",
+            hover_color="#C0392B",
         ).grid(row=0, column=3, padx=6, pady=6, sticky="ew")
 
         ctk.CTkButton(
             btns,
             text="再読込",
             command=self.refresh_table,
+            font=self.BTN_FONT,
+            height=self.BTN_HEIGHT,
+            corner_radius=self.BTN_RADIUS,
         ).grid(row=0, column=4, padx=6, pady=6, sticky="ew")
+
 
         # 下段：一覧（Treeview） – 余白を減らし、画面いっぱいに広げる
         table_wrap = ctk.CTkFrame(self)

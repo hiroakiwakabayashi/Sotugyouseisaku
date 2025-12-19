@@ -181,6 +181,7 @@ class MyAttendanceScreen(ctk.CTkFrame):
                 text=label,
                 height=BTN_H,
                 command=cmd,
+                font=("Meiryo UI", 15, "bold"),
             ).grid(row=0, column=col, padx=4, pady=(2, 4), sticky="ew")
 
 

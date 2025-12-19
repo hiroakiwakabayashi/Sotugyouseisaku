@@ -96,12 +96,14 @@ class ShiftWeeklyReviewScreen(ctk.CTkFrame):
             bar,
             text="◀ 前の週",
             height=BTN_H,
+            font=("Meiryo UI", 15, "bold"),
             command=lambda: self._move_week(-7),
         )
         next_btn = ctk.CTkButton(
             bar,
             text="次の週 ▶",
             height=BTN_H,
+            font=("Meiryo UI", 15, "bold"),
             command=lambda: self._move_week(+7),
         )
         prev_btn.grid(row=0, column=2, padx=4, pady=4, sticky="ew")
@@ -123,6 +125,7 @@ class ShiftWeeklyReviewScreen(ctk.CTkFrame):
             bar,
             text="更新",
             height=BTN_H,
+            font=("Meiryo UI", 15, "bold"),
             command=self.reload,
         ).grid(
             row=0, column=5,

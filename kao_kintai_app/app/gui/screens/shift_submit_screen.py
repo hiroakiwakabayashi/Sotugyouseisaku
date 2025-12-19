@@ -100,12 +100,45 @@ class ShiftSubmitScreen(ctk.CTkFrame):
         )
         self.emp_menu.grid(row=0, column=1, padx=(0, 12), pady=6, sticky="w")
 
+        BTN_FONT = ("Meiryo UI", 15, "bold")  # ← クラス定数として追加してもOK
+
         prev_btn = ctk.CTkButton(
-            bar, text="◀ 前の週", command=lambda: self._move_week(-7), width=110, height=34
+            bar,
+            text="◀ 前の週",
+            command=lambda: self._move_week(-7),
+            width=110,
+            height=34,
+            font=BTN_FONT,
         )
+
         next_btn = ctk.CTkButton(
-            bar, text="次の週 ▶", command=lambda: self._move_week(+7), width=110, height=34
+            bar,
+            text="次の週 ▶",
+            command=lambda: self._move_week(+7),
+            width=110,
+            height=34,
+            font=BTN_FONT,
         )
+
+        save_btn = ctk.CTkButton(
+            bar,
+            text="この週を保存",
+            command=self._save_week,
+            height=34,
+            font=("Meiryo UI", 15, "bold"),  # 前/次の週と揃えるなら
+            fg_color="#0d6efd",
+            hover_color="#0b5ed7",
+        )
+
+        save_btn.grid(
+            row=0,
+            column=5,
+            padx=(12, 8),
+            pady=6,
+            sticky="e"
+        )
+
+
         self.week_label = ctk.CTkLabel(bar, text="", font=("Meiryo UI", 14, "bold"))
 
         prev_btn.grid(row=0, column=2, padx=6, pady=6)
@@ -121,19 +154,6 @@ class ShiftSubmitScreen(ctk.CTkFrame):
         for col in (1, 2, 3, 4):
             self.rows.grid_columnconfigure(col, weight=0, minsize=110)
         self.rows.grid_columnconfigure(5, weight=1)
-
-        # 操作用ボタン
-        foot = ctk.CTkFrame(self)
-        foot.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 10))
-        foot.grid_columnconfigure(0, weight=1)
-        ctk.CTkButton(
-            foot,
-            text="この週を保存",
-            command=self._save_week,
-            height=40,
-            fg_color="#0d6efd",
-            hover_color="#0b5ed7",
-        ).pack(side="right", padx=6)
 
         # 週表示・行構築
         self._build_week_rows()

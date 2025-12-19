@@ -125,6 +125,7 @@ class EmployeeSuOverviewScreen(ctk.CTkFrame):
             width=200,           # ← 好みで 180〜220
             corner_radius=6,
             command=self._save_selected_wage,
+            font=("Meiryo UI", 15, "bold"),
         )
         save_btn.grid(row=0, column=2, sticky="w", padx=PADX, pady=PADY)
 

@@ -144,16 +144,25 @@ class FaceDataScreen(ctk.CTkFrame):
         )
         self.count_label.pack(side="left")
 
+        BTN_FONT = ("Meiryo UI", 15, "bold")
+
         self.btn_capture = ctk.CTkButton(
-            right, text="撮影して保存", command=self._capture, state="disabled"
+            right,
+            text="撮影して保存",
+            command=self._capture,
+            state="disabled",
+            font=BTN_FONT,
         )
         self.btn_capture.pack(fill="x", padx=12, pady=(6, 6))
 
         self.btn_reset = ctk.CTkButton(
-            right, text="カウントをリセット", command=self._reset_count
+            right,
+            text="カウントをリセット",
+            command=self._reset_count,
+            font=BTN_FONT,
         )
         self.btn_reset.pack(fill="x", padx=12, pady=(0, 6))
-
+        
         # ------------------ カメラ ------------------
         self.cap = cv2.VideoCapture(0)  # 必要ならカメラID変更
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)

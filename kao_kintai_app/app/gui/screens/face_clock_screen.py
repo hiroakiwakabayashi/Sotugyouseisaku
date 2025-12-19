@@ -33,7 +33,7 @@ class FaceClockScreen(ctk.CTkFrame):
     SUBHEAD_FONT = ("Meiryo UI", 14, "bold")
     INFO_KEY_FONT = ("Meiryo UI", 14, "bold")
     INFO_VAL_FONT = ("Meiryo UI", 16, "bold")
-    BTN_FONT = ("Meiryo UI", 15, "bold")
+    BTN_FONT = ("Meiryo UI", 17, "bold")
 
     BTN_W = 96
     BTN_H = 48
