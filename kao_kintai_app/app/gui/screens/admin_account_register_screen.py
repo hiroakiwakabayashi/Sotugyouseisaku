@@ -4,10 +4,7 @@ from app.infra.db.admin_repo import AdminRepo
 
 
 class AdminAccountRegisterScreen(ctk.CTkFrame):
-    """管理者アカウント 登録画面
-       - ロール選択（admin/su）
-       - su の作成は su ログイン時のみ可（UI/保存時で二重チェック）
-    """
+    """管理者アカウント 登録画面"""
 
     def __init__(self, master, current_admin: dict | None = None):
         super().__init__(master)
@@ -15,19 +12,19 @@ class AdminAccountRegisterScreen(ctk.CTkFrame):
         self.current_admin = current_admin or {}
         self.is_su = (self.current_admin.get("role") == "su")
 
-        # 背景色をログイン画面と合わせる
+        # 背景色
         self.configure(fg_color="#f5f5f5")
 
-        # ===== 中央の登録パネル =====
+        # ===== 中央パネル（BODYを大きく）=====
         panel = ctk.CTkFrame(
             self,
             corner_radius=20,
             fg_color="white",
-            width=850,
-            height=550,
+            width=900,     # ← 少し拡張
+            height=600,    # ← 少し拡張
         )
-        panel.place(relx=0.5, rely=0.5, anchor="center")  # 画面中央に固定配置
-        panel.grid_propagate(False)  # 中身でサイズが変わらないよう固定
+        panel.place(relx=0.5, rely=0.5, anchor="center")
+        panel.grid_propagate(False)
 
         # ===== タイトル =====
         ctk.CTkLabel(
@@ -35,69 +32,77 @@ class AdminAccountRegisterScreen(ctk.CTkFrame):
             text="管理者アカウント登録",
             font=("Meiryo UI", 28, "bold"),
             text_color="#333333",
-        ).pack(pady=(40, 20))
+        ).pack(pady=(40, 30))
 
-        # ===== フォーム部（グリッド） =====
+        # ===== フォーム =====
         form = ctk.CTkFrame(panel, fg_color="transparent")
-        form.pack(fill="x", padx=60, pady=(0, 10))
+        form.pack(fill="x", padx=80, pady=(0, 30))
         form.grid_columnconfigure(0, weight=0)
         form.grid_columnconfigure(1, weight=1)
 
         # 入力フィールド
-        self.username = ctk.CTkEntry(form, placeholder_text="例: admin02")
-        self.display = ctk.CTkEntry(form, placeholder_text="表示名（例: 山田 太郎）")
-        self.pw1 = ctk.CTkEntry(form, placeholder_text="パスワード", show="•")
-        self.pw2 = ctk.CTkEntry(form, placeholder_text="パスワード（確認）", show="•")
+        self.username = ctk.CTkEntry(form, placeholder_text="例: admin02", font=("Meiryo UI", 15))
+        self.display  = ctk.CTkEntry(form, placeholder_text="表示名（例: 山田 太郎）", font=("Meiryo UI", 15))
+        self.pw1      = ctk.CTkEntry(form, placeholder_text="パスワード", show="•", font=("Meiryo UI", 15))
+        self.pw2      = ctk.CTkEntry(form, placeholder_text="パスワード（確認）", show="•", font=("Meiryo UI", 15))
 
-        # ロール選択（su ログイン時のみ su を選べる）
         role_values = ["admin", "su"] if self.is_su else ["admin"]
         self.role_var = ctk.StringVar(value=role_values[0])
-        self.role_sel = ctk.CTkOptionMenu(form, values=role_values, variable=self.role_var)
+        self.role_sel = ctk.CTkOptionMenu(
+            form,
+            values=role_values,
+            variable=self.role_var,
+            font=("Meiryo UI", 15),
+        )
 
-        # 行ごとにラベル＋入力欄を配置
+        # 行配置
         self._row(form, 0, "ユーザーID", self.username)
         self._row(form, 1, "表示名", self.display)
         self._row(form, 2, "パスワード", self.pw1)
-        self._row(form, 3, "パスワード(確認)", self.pw2)
+        self._row(form, 3, "パスワード（確認）", self.pw2)
         self._row(form, 4, "権限ロール", self.role_sel)
 
-        # ===== 登録ボタン =====
+        # ===== ボタン =====
         btn_frame = ctk.CTkFrame(panel, fg_color="transparent")
-        btn_frame.pack(pady=(10, 10))
+        btn_frame.pack(pady=(10, 20))
+
         self.btn = ctk.CTkButton(
             btn_frame,
             text="登録する",
-            width=200,
-            height=40,
+            width=220,
+            height=44,
             fg_color="#0d6efd",
             hover_color="#0b5ed7",
+            font=("Meiryo UI", 15, "bold"),  # ← BOLD
             command=self._save,
         )
-        self.btn.grid(row=0, column=0, padx=4, pady=4)
+        self.btn.grid(row=0, column=0, padx=8, pady=8)
 
         # ===== 注意書き =====
         tip = "※ su は全権限を持つ特権アカウントです。必要最小限の作成に留めてください。"
         if not self.is_su:
             tip += "（現在のログイン権限では su を作成できません）"
+
         ctk.CTkLabel(
             panel,
             text=tip,
             text_color="#666666",
-            font=("Meiryo UI", 11),
-            wraplength=750,
+            font=("Meiryo UI", 13),   # ← タイトル以外なので 15 未満で補助扱い
+            wraplength=780,
             justify="left",
-        ).pack(pady=(0, 12), padx=40, anchor="w")
+        ).pack(pady=(0, 16), padx=60, anchor="w")
 
     def _row(self, parent, r: int, label: str, widget: ctk.CTkBaseClass):
-        """ラベル + 入力欄 を1行分配置（ログイン画面風パディングに揃える）"""
+        """ラベル + 入力欄"""
         ctk.CTkLabel(
             parent,
             text=label,
-            width=120,
+            width=140,
             anchor="w",
             text_color="#333333",
-        ).grid(row=r, column=0, sticky="w", padx=(0, 12), pady=6)
-        widget.grid(row=r, column=1, sticky="ew", pady=6)
+            font=("Meiryo UI", 15),
+        ).grid(row=r, column=0, sticky="w", padx=(0, 16), pady=10)
+        widget.grid(row=r, column=1, sticky="ew", pady=10)
 
     def _save(self):
         u = self.username.get().strip()
@@ -106,7 +111,6 @@ class AdminAccountRegisterScreen(ctk.CTkFrame):
         p2 = self.pw2.get()
         role = (self.role_var.get() or "admin").lower()
 
-        # 最低限バリデーション
         if not u or not d or not p1 or not p2:
             messagebox.showwarning("入力不足", "全ての項目を入力してください。")
             return
@@ -122,18 +126,13 @@ class AdminAccountRegisterScreen(ctk.CTkFrame):
         if role not in ("admin", "su"):
             messagebox.showwarning("ロール", "ロールは admin または su を選択してください。")
             return
-
-        # su 作成ガード（UI側で選べなくても保存時に再チェック）
         if role == "su" and not self.is_su:
             messagebox.showwarning("権限", "su アカウントの作成は su のみ許可されています。")
             return
-
-        # 重複チェック
         if self.repo.find_by_username(u):
             messagebox.showwarning("重複", "このユーザーIDは既に存在します。")
             return
 
-        # 登録
         self.repo.create(
             username=u,
             display_name=d,
@@ -143,8 +142,6 @@ class AdminAccountRegisterScreen(ctk.CTkFrame):
         )
         messagebox.showinfo("登録完了", f"管理者 '{u}'（ロール: {role}）を登録しました。")
 
-        # 入力クリア
         for e in (self.username, self.display, self.pw1, self.pw2):
             e.delete(0, "end")
-        # su でなければ admin 固定に戻す
         self.role_var.set("admin")

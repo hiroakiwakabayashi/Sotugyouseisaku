@@ -34,6 +34,8 @@ class FaceClockScreen(ctk.CTkFrame):
     INFO_KEY_FONT = ("Meiryo UI", 14, "bold")
     INFO_VAL_FONT = ("Meiryo UI", 16, "bold")
     BTN_FONT = ("Meiryo UI", 17, "bold")
+    MSG_KEY_FONT = ("Meiryo UI", 16, "bold")
+    MSG_VAL_FONT = ("Meiryo UI", 17, "bold")
 
     BTN_W = 96
     BTN_H = 48
@@ -47,10 +49,15 @@ class FaceClockScreen(ctk.CTkFrame):
         self.att_repo = AttendanceRepo()
         self.att_svc = AttendanceService(self.att_repo)
 
-        # Haar / ORB
-        self.face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-        )
+        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        self.face_cascade = cv2.CascadeClassifier(cascade_path)
+
+        if self.face_cascade.empty():
+            messagebox.showerror(
+                "致命的エラー",
+                f"Haar Cascade の読み込みに失敗しました。\n{cascade_path}"
+            )
+            self.face_cascade = None
         self.orb = cv2.ORB_create(nfeatures=700)
         self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 
@@ -225,20 +232,34 @@ class FaceClockScreen(ctk.CTkFrame):
         main.grid_rowconfigure(1, weight=1)
         main.grid_columnconfigure(0, weight=1)
 
-        # メッセージ（薄灰ブロック内側にも左 16px）
-        self.msg_lbl = ctk.CTkLabel(
-            main,
-            textvariable=self.message_var,
-            justify="left",
-            anchor="w",
-        )
-        self.msg_lbl.grid(
+        # メッセージ行ラッパー
+        msg_wrap = ctk.CTkFrame(main, fg_color="transparent")
+        msg_wrap.grid(
             row=0,
             column=0,
             sticky="ew",
             padx=self.PADX,
             pady=(0, self.PADY),
         )
+        msg_wrap.grid_columnconfigure(1, weight=1)
+
+        # 項目名（固定）
+        ctk.CTkLabel(
+            msg_wrap,
+            text="カメラ状態：",
+            font=self.MSG_KEY_FONT,
+            anchor="w",
+        ).grid(row=0, column=0, sticky="w")
+
+        # 実際のメッセージ
+        self.msg_lbl = ctk.CTkLabel(
+            msg_wrap,
+            textvariable=self.message_var,
+            font=self.MSG_VAL_FONT,
+            anchor="w",
+            justify="left",
+        )
+        self.msg_lbl.grid(row=0, column=1, sticky="ew")
 
         # カメラ枠（薄い灰色のカードで囲む）
         self.cam_border = ctk.CTkFrame(
@@ -443,10 +464,13 @@ class FaceClockScreen(ctk.CTkFrame):
     def _evaluate_and_draw(self, frame_bgr):
         h, w = frame_bgr.shape[:2]
         gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+        if self.face_cascade is None:
+            self.message_var.set("顔検出器の初期化に失敗しています。")
+            return frame_bgr, False, None, gray
+
         faces = self.face_cascade.detectMultiScale(
             gray, 1.1, 5, minSize=(120, 120)
         )
-
         if len(faces) == 0:
             self._quality_ok_streak = 0
             # 顔データ読み込み中はメッセージを上書きしない（起動中メッセージ優先）
@@ -540,6 +564,9 @@ class FaceClockScreen(ctk.CTkFrame):
                 if img is None:
                     continue
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                if self.face_cascade is None:
+                    continue
+
                 faces = self.face_cascade.detectMultiScale(
                     gray, 1.1, 5, minSize=(100, 100)
                 )
