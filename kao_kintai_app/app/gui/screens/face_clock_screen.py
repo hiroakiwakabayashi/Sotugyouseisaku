@@ -9,18 +9,11 @@ import cv2
 import numpy as np
 from PIL import Image
 import threading  # ★追加（顔データ読込を非同期化）
-import sys  # ← 追加
-
 
 from app.infra.db.employee_repo import EmployeeRepo
 from app.infra.db.attendance_repo import AttendanceRepo
 from app.services.attendance_service import AttendanceService
 from app.services.config_service import ConfigService
-
-def _app_root() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parents[3]
 
 
 class FaceClockScreen(ctk.CTkFrame):
@@ -33,9 +26,7 @@ class FaceClockScreen(ctk.CTkFrame):
     SUBHEAD_FONT = ("Meiryo UI", 14, "bold")
     INFO_KEY_FONT = ("Meiryo UI", 14, "bold")
     INFO_VAL_FONT = ("Meiryo UI", 16, "bold")
-    BTN_FONT = ("Meiryo UI", 17, "bold")
-    MSG_KEY_FONT = ("Meiryo UI", 16, "bold")
-    MSG_VAL_FONT = ("Meiryo UI", 17, "bold")
+    BTN_FONT = ("Meiryo UI", 15, "bold")
 
     BTN_W = 96
     BTN_H = 48
@@ -49,17 +40,23 @@ class FaceClockScreen(ctk.CTkFrame):
         self.att_repo = AttendanceRepo()
         self.att_svc = AttendanceService(self.att_repo)
 
-        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-        self.face_cascade = cv2.CascadeClassifier(cascade_path)
+        # Haar / ORB
+        self.face_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
 
+        # ★ 追加：Cascadeロード確認
         if self.face_cascade.empty():
+            cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
             messagebox.showerror(
-                "致命的エラー",
-                f"Haar Cascade の読み込みに失敗しました。\n{cascade_path}"
+                "Cascade 読み込み失敗",
+                f"haarcascade_frontalface_default.xml を読み込めませんでした。\n{cascade_path}"
             )
-            self.face_cascade = None
+
         self.orb = cv2.ORB_create(nfeatures=700)
-        self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+
+        # ✅ 変更：KNN を使うので crossCheck=False
+        self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
 
         # しきい値（Config）
         vcfg = ConfigService().get_vision()
@@ -74,6 +71,13 @@ class FaceClockScreen(ctk.CTkFrame):
         self.UNKNOWN_MARGIN_RATIO = float(vcfg.get("unknown_margin_ratio", 0.25))
         self.ID_OK_FRAMES = int(vcfg.get("id_ok_frames", 2))
         self.QUALITY_OK_FRAMES = int(vcfg.get("quality_ok_frames", 2))
+
+        # ✅ 追加：RatioTest の厳しさ（小さいほど厳しい＝誤認識減）
+        # 0.70〜0.85 あたりで調整。まずは 0.75 推奨
+        self.RATIO_TEST = float(vcfg.get("ratio_test", 0.75))
+
+        # ✅ 追加：best / second の比（小さいほど厳しい＝誤認識減）
+        self.BEST_SECOND_RATIO = float(vcfg.get("best_second_ratio", 1.35))
 
         # 表示用変数
         self.message_var = tk.StringVar(value="起動中…（顔データを読み込みます）")
@@ -98,7 +102,7 @@ class FaceClockScreen(ctk.CTkFrame):
         self._dataset_ready = False
 
         # ===== レイアウト（勤怠一覧と同じ 3 行構成） =====
-        # 行: 0=タイトル, 1=ツールバー（薄灰）, 2=メイン（薄灰）
+        # 行: 0=タイトル, 1=ツールバー（薄灰）, 2=メイン
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
@@ -134,7 +138,7 @@ class FaceClockScreen(ctk.CTkFrame):
             toolbar.grid_columnconfigure(i, weight=0)
         toolbar.grid_columnconfigure(7, weight=1)  # 右端を伸ばして余白にする
 
-        # 左：カメラ映像ラベル（薄灰ブロックの内側にも左 16px）
+        # 左：カメラ映像ラベル
         ctk.CTkLabel(
             toolbar,
             text="カメラ映像",
@@ -217,7 +221,6 @@ class FaceClockScreen(ctk.CTkFrame):
         )
 
         for i, b in enumerate((self.btn_in, self.btn_out, self.btn_break, self.btn_back)):
-            # 全ボタン同じ余白にする
             b.grid(row=0, column=i, padx=8, pady=0, sticky="e")
 
         # --- 3 行目：メイン領域（メッセージ + カメラ） ---
@@ -232,36 +235,20 @@ class FaceClockScreen(ctk.CTkFrame):
         main.grid_rowconfigure(1, weight=1)
         main.grid_columnconfigure(0, weight=1)
 
-        # メッセージ行ラッパー
-        msg_wrap = ctk.CTkFrame(main, fg_color="transparent")
-        msg_wrap.grid(
+        self.msg_lbl = ctk.CTkLabel(
+            main,
+            textvariable=self.message_var,
+            justify="left",
+            anchor="w",
+        )
+        self.msg_lbl.grid(
             row=0,
             column=0,
             sticky="ew",
             padx=self.PADX,
             pady=(0, self.PADY),
         )
-        msg_wrap.grid_columnconfigure(1, weight=1)
 
-        # 項目名（固定）
-        ctk.CTkLabel(
-            msg_wrap,
-            text="カメラ状態：",
-            font=self.MSG_KEY_FONT,
-            anchor="w",
-        ).grid(row=0, column=0, sticky="w")
-
-        # 実際のメッセージ
-        self.msg_lbl = ctk.CTkLabel(
-            msg_wrap,
-            textvariable=self.message_var,
-            font=self.MSG_VAL_FONT,
-            anchor="w",
-            justify="left",
-        )
-        self.msg_lbl.grid(row=0, column=1, sticky="ew")
-
-        # カメラ枠（薄い灰色のカードで囲む）
         self.cam_border = ctk.CTkFrame(
             main,
             fg_color="#E5E7EB",
@@ -314,7 +301,6 @@ class FaceClockScreen(ctk.CTkFrame):
                 self._dataset_ready = True
                 self.after(0, lambda: self.message_var.set("カメラに顔を向けてください。"))
             except Exception:
-                # 失敗してもUIが固まらないように
                 self._dataset_ready = False
                 self.after(0, lambda: self.message_var.set("顔データの読み込みに失敗しました。"))
         threading.Thread(target=worker, daemon=True).start()
@@ -322,7 +308,6 @@ class FaceClockScreen(ctk.CTkFrame):
     # ---------- 推定情報（横並びペア） ----------
     def _kv_inline(self, parent, label, var):
         wrap = ctk.CTkFrame(parent, fg_color="transparent")
-        # 2つ目以降のペアは少し右に余白を入れる
         wrap.pack(side="left", padx=(0 if not parent.pack_slaves() else 24))
         ctk.CTkLabel(
             wrap,
@@ -340,7 +325,6 @@ class FaceClockScreen(ctk.CTkFrame):
 
     # ---------- Resize：中央カラム幅いっぱいにカメラを合わせる ----------
     def _on_resize(self, _event=None):
-        # 全体幅から左右 PADX×2 を引いた分を利用可能幅とする
         avail_w = max(320, self.winfo_width() - (self.PADX * 2))
         ar_w, ar_h = self.CAM_ASPECT
         new_w = int(min(avail_w, 1280))
@@ -366,86 +350,18 @@ class FaceClockScreen(ctk.CTkFrame):
     # ---------- カメラループ ----------
     def _loop(self):
         ok, frame = self.cap.read()
-        if ok:
-            annotated, stable_ok, face_rect, gray = self._evaluate_and_draw(frame)
 
-            # ★ 顔データがまだ準備できていない間は、映像表示だけして認識はしない
-            if not self._dataset_ready:
-                self._update_buttons(can_enable=False)
+        # ★ frame が取れないときは落ちずに次へ
+        if not ok or frame is None:
+            self._after_id = self.after(30, self._loop)
+            return
 
-                # カメラ画像を表示
-                rgb = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
-                rgb = cv2.resize(rgb, (self.cam_w, self.cam_h))
-                pil_img = Image.fromarray(rgb)
-                self._cam_image = ctk.CTkImage(
-                    light_image=pil_img,
-                    dark_image=pil_img,
-                    size=(self.cam_w, self.cam_h),
-                )
-                self.preview.configure(image=self._cam_image)
+        annotated, stable_ok, face_rect, gray = self._evaluate_and_draw(frame)
 
-                self.frame_count += 1
-                self._after_id = self.after(30, self._loop)
-                return
+        # ★ 顔データがまだ準備できていない間は、映像表示だけして認識はしない
+        if not self._dataset_ready:
+            self._update_buttons(can_enable=False)
 
-            # 認識は間引き実行
-            if (
-                stable_ok
-                and face_rect is not None
-                and (self.frame_count % self.RECOG_INTERVAL == 0)
-            ):
-                x, y, w, h = face_rect
-                face_roi = gray[y : y + h, x : x + w]
-
-                code, best, second = self._recognize(face_roi)
-                self.last_best = (code or "", best)
-
-                # Unknown 判定
-                unknown = False
-                if code is None or best < self.MATCH_THRESHOLD:
-                    unknown = True
-                else:
-                    gap = best - second
-                    ratio = (best - second) / max(best, 1)
-                    if gap < self.UNKNOWN_MIN_GAP and ratio < self.UNKNOWN_MARGIN_RATIO:
-                        unknown = True
-
-                if unknown:
-                    self._reset_recognition_ui(
-                        "未登録の顔、または一致度が低いため認証できません。"
-                    )
-                else:
-                    if code == self._last_candidate:
-                        self._id_ok_streak += 1
-                    else:
-                        self._last_candidate = code
-                        self._id_ok_streak = 1
-
-                    if self._id_ok_streak < self.ID_OK_FRAMES:
-                        self.rec_code_var.set(code)
-                        self.rec_name_var.set(self.name_map.get(code, "--"))
-                        self.message_var.set(
-                            "確認中…（ぶれずに少し静止してください）"
-                        )
-                    else:
-                        name = self.name_map.get(code, "--")
-                        self.rec_code_var.set(code)
-                        self.rec_name_var.set(name)
-                        if code != self._current_code_ui:
-                            self._current_code_ui = code
-                            last = self.att_svc.last_state(code)
-                            self.allowed_next_set = self.att_svc.allowed_next(last)
-                        self.message_var.set("顔を認識しました。打刻が可能です。")
-
-            # ボタン状態
-            can_enable = (
-                stable_ok
-                and (self._id_ok_streak >= self.ID_OK_FRAMES)
-                and (self.last_best[0] != "")
-            )
-            self._update_buttons(can_enable=can_enable)
-
-            # カメラ画像を中央カラム幅にフィットさせて表示（CTkImage 使用）
             rgb = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
             rgb = cv2.resize(rgb, (self.cam_w, self.cam_h))
             pil_img = Image.fromarray(rgb)
@@ -457,29 +373,130 @@ class FaceClockScreen(ctk.CTkFrame):
             self.preview.configure(image=self._cam_image)
 
             self.frame_count += 1
+            self._after_id = self.after(30, self._loop)
+            return
 
+        # 認識は間引き実行
+        if (
+            stable_ok
+            and face_rect is not None
+            and gray is not None
+            and (self.frame_count % self.RECOG_INTERVAL == 0)
+        ):
+            x, y, w, h = face_rect
+            face_roi = gray[y: y + h, x: x + w]
+
+            code, best, second = self._recognize(face_roi)
+            self.last_best = (code or "", best)
+
+            # ✅ 誤認識を減らす：Unknown 判定を強める
+            unknown = False
+            if code is None or best < self.MATCH_THRESHOLD:
+                unknown = True
+            else:
+                gap = best - second
+
+                # margin_ratio: (best-second)/best（大きいほど「独走」）
+                margin_ratio = (best - second) / max(best, 1)
+
+                # best/second の比（大きいほど「独走」）
+                best_second_ratio = best / max(second, 1)
+
+                # ★重要：AND → OR（どちらか弱ければ Unknown に倒す）
+                if (gap < self.UNKNOWN_MIN_GAP) or (margin_ratio < self.UNKNOWN_MARGIN_RATIO) or (best_second_ratio < self.BEST_SECOND_RATIO):
+                    unknown = True
+
+            if unknown:
+                self._reset_recognition_ui(
+                    "未登録の顔、または一致度が低いため認証できません。"
+                )
+            else:
+                if code == self._last_candidate:
+                    self._id_ok_streak += 1
+                else:
+                    self._last_candidate = code
+                    self._id_ok_streak = 1
+
+                if self._id_ok_streak < self.ID_OK_FRAMES:
+                    self.rec_code_var.set(code)
+                    self.rec_name_var.set(self.name_map.get(code, "--"))
+                    self.message_var.set("確認中…（ぶれずに少し静止してください）")
+                else:
+                    name = self.name_map.get(code, "--")
+                    self.rec_code_var.set(code)
+                    self.rec_name_var.set(name)
+                    if code != self._current_code_ui:
+                        self._current_code_ui = code
+                        last = self.att_svc.last_state(code)
+                        self.allowed_next_set = self.att_svc.allowed_next(last)
+                    self.message_var.set("顔を認識しました。打刻が可能です。")
+
+        # ボタン状態
+        can_enable = (
+            stable_ok
+            and (self._id_ok_streak >= self.ID_OK_FRAMES)
+            and (self.last_best[0] != "")
+        )
+        self._update_buttons(can_enable=can_enable)
+
+        # カメラ表示
+        rgb = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
+        rgb = cv2.resize(rgb, (self.cam_w, self.cam_h))
+        pil_img = Image.fromarray(rgb)
+        self._cam_image = ctk.CTkImage(
+            light_image=pil_img,
+            dark_image=pil_img,
+            size=(self.cam_w, self.cam_h),
+        )
+        self.preview.configure(image=self._cam_image)
+
+        self.frame_count += 1
         self._after_id = self.after(30, self._loop)
 
     # ---------- 顔検出 + 品質評価 ----------
     def _evaluate_and_draw(self, frame_bgr):
+        # frame が無効なケースをガード
+        if frame_bgr is None:
+            return frame_bgr, False, None, None
+
         h, w = frame_bgr.shape[:2]
+        if h <= 0 or w <= 0:
+            return frame_bgr, False, None, None
+
         gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-        if self.face_cascade is None:
-            self.message_var.set("顔検出器の初期化に失敗しています。")
+        if gray is None or gray.size == 0:
             return frame_bgr, False, None, gray
 
-        faces = self.face_cascade.detectMultiScale(
-            gray, 1.1, 5, minSize=(120, 120)
-        )
+        # cascade が空なら落ちないように
+        if self.face_cascade.empty():
+            self._quality_ok_streak = 0
+            if self._dataset_ready:
+                self.message_var.set("顔検出器の読み込みに失敗しました（Cascade が空です）。")
+            return frame_bgr, False, None, gray
+
+        # detectMultiScale は環境によって例外が出ることがあるので保護
+        try:
+            faces = self.face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                flags=cv2.CASCADE_SCALE_IMAGE,   # ★追加（互換性向上）
+                minSize=(120, 120),
+            )
+        except cv2.error:
+            self._quality_ok_streak = 0
+            if self._dataset_ready:
+                self.message_var.set("顔検出でエラーが発生しました。カメラ環境を確認してください。")
+            return frame_bgr, False, None, gray
+
         if len(faces) == 0:
             self._quality_ok_streak = 0
-            # 顔データ読み込み中はメッセージを上書きしない（起動中メッセージ優先）
             if self._dataset_ready:
                 self.message_var.set("顔を映してください。（正面・適度な距離）")
             return frame_bgr, False, None, gray
 
         x, y, fw, fh = max(faces, key=lambda r: r[2] * r[3])
-        roi_gray = gray[y : y + fh, x : x + fw]
+        roi_gray = gray[y: y + fh, x: x + fw]
 
         area_ratio = (fw * fh) / (w * h)
         blur = cv2.Laplacian(roi_gray, cv2.CV_64F).var()
@@ -512,23 +529,36 @@ class FaceClockScreen(ctk.CTkFrame):
 
         return frame_bgr, stable_ok, (x, y, fw, fh), gray
 
-    # ---------- 顔特徴量マッチング ----------
+    # ---------- 顔特徴量マッチング（✅KNN + ratio test） ----------
     def _recognize(self, roi_gray):
-        kp, des_l = self.orb.detectAndCompute(roi_gray, None)
+        kp_l, des_l = self.orb.detectAndCompute(roi_gray, None)
         if des_l is None or len(des_l) == 0:
             return None, 0, 0
+
+        ratio = self.RATIO_TEST  # 0.70〜0.85 で調整
+
+        def good_count(des_a: np.ndarray, des_b: np.ndarray) -> int:
+            try:
+                knn = self.bf.knnMatch(des_a, des_b, k=2)
+            except cv2.error:
+                return 0
+
+            good = 0
+            for pair in knn:
+                if len(pair) < 2:
+                    continue
+                m, n = pair[0], pair[1]
+                if m.distance < ratio * n.distance:
+                    good += 1
+            return good
 
         scores: list[tuple[str, int]] = []
         for code, desc_list in self.des_map.items():
             best_for_code = 0
             for des_ref in desc_list:
-                try:
-                    matches = self.bf.match(des_l, des_ref)
-                except cv2.error:
-                    continue
-                matches = sorted(matches, key=lambda m: m.distance)
-                good = [m for m in matches if m.distance <= 60]
-                best_for_code = max(best_for_code, len(good))
+                c = good_count(des_l, des_ref)
+                if c > best_for_code:
+                    best_for_code = c
             scores.append((code, best_for_code))
 
         if not scores:
@@ -537,6 +567,7 @@ class FaceClockScreen(ctk.CTkFrame):
         scores.sort(key=lambda x: x[1], reverse=True)
         best_code, best = scores[0]
         second = scores[1][1] if len(scores) >= 2 else 0
+
         if best <= 0:
             return None, 0, 0
         return best_code, best, second
@@ -549,14 +580,14 @@ class FaceClockScreen(ctk.CTkFrame):
         for r in self.emp_repo.list_all():
             self.name_map[r["code"]] = r["name"]
 
-        root = _app_root() / "data" / "faces"
+        root = Path(__file__).resolve().parents[3] / "data" / "faces"
         root.mkdir(parents=True, exist_ok=True)
 
         for code in self.name_map.keys():
             imgs = sorted(glob.glob(str(root / code / "*.jpg")))
             if not imgs:
                 continue
-            imgs = imgs[-self.TOP_K_IMAGES :]
+            imgs = imgs[-self.TOP_K_IMAGES:]
 
             desc_list: list[np.ndarray] = []
             for p in imgs:
@@ -564,19 +595,28 @@ class FaceClockScreen(ctk.CTkFrame):
                 if img is None:
                     continue
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                if self.face_cascade is None:
-                    continue
 
-                faces = self.face_cascade.detectMultiScale(
-                    gray, 1.1, 5, minSize=(100, 100)
-                )
+                # ★ ここも例外ガード（環境で落ちる可能性があるため）
+                try:
+                    faces = self.face_cascade.detectMultiScale(
+                        gray,
+                        scaleFactor=1.1,
+                        minNeighbors=5,
+                        flags=cv2.CASCADE_SCALE_IMAGE,
+                        minSize=(100, 100),
+                    )
+                except cv2.error:
+                    faces = []
+
                 roi = gray
                 if len(faces) > 0:
                     x, y, w, h = max(faces, key=lambda r: r[2] * r[3])
-                    roi = gray[y : y + h, x : x + w]
+                    roi = gray[y: y + h, x: x + w]
+
                 kp, des = self.orb.detectAndCompute(roi, None)
                 if des is not None and len(des) > 0:
                     desc_list.append(des)
+
             if desc_list:
                 self.des_map[code] = desc_list
 
@@ -607,11 +647,7 @@ class FaceClockScreen(ctk.CTkFrame):
     # ---------- ボタン状態更新 ----------
     def _update_buttons(self, can_enable: bool):
         def st(ptype: str) -> str:
-            return (
-                "normal"
-                if (can_enable and (ptype in self.allowed_next_set))
-                else "disabled"
-            )
+            return "normal" if (can_enable and (ptype in self.allowed_next_set)) else "disabled"
 
         self.btn_in.configure(state=st("CLOCK_IN"))
         self.btn_out.configure(state=st("CLOCK_OUT"))
