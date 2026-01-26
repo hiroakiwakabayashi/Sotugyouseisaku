@@ -18,7 +18,7 @@ from app.infra.db.attendance_repo import AttendanceRepo
 __all__ = ["AppShell", "run_app"]  # ← 追加：エクスポートを明示
 
 # ★ 開発中だけ True にする。本番運用するときは必ず False に戻すこと。
-DEV_SKIP_ADMIN_LOGIN = True
+DEV_SKIP_ADMIN_LOGIN = False
 
 
 class AppShell(ctk.CTkFrame):

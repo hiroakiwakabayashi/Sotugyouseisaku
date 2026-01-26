@@ -32,9 +32,9 @@ class AdminLoginScreen(ctk.CTkFrame):
         ).pack(pady=(40, 25))
 
         # ===== ユーザID =====
-        ctk.CTkLabel(login_panel, text="ユーザID", anchor="w", text_color="#333333")\
+        ctk.CTkLabel(login_panel, text="ユーザID", anchor="w", text_color="#333333",font=("Meiryo UI", 15))\
             .pack(pady=(10, 2), padx=60, fill="x")
-        self.id_entry = ctk.CTkEntry(login_panel, placeholder_text="ユーザIDを入力", height=40)
+        self.id_entry = ctk.CTkEntry(login_panel, placeholder_text="ユーザIDを入力", height=40,font=("Meiryo UI", 15))
         self.id_entry.pack(pady=(0, 5), padx=60, fill="x")
         self.id_error = ctk.CTkLabel(login_panel, text="", text_color="red", anchor="w")
         self.id_error.pack(pady=(0, 5), padx=60, fill="x")
@@ -50,9 +50,9 @@ class AdminLoginScreen(ctk.CTkFrame):
 
 
         # ===== パスワード =====
-        ctk.CTkLabel(login_panel, text="パスワード", anchor="w", text_color="#333333")\
+        ctk.CTkLabel(login_panel, text="パスワード", anchor="w", text_color="#333333",font=("Meiryo UI", 15))\
             .pack(pady=(15, 2), padx=60, fill="x")
-        self.pw_entry = ctk.CTkEntry(login_panel, placeholder_text="パスワードを入力", show="•", height=40)
+        self.pw_entry = ctk.CTkEntry(login_panel, placeholder_text="パスワードを入力", show="•", height=40,font=("Meiryo UI", 15))
         self.pw_entry.pack(pady=(0, 5), padx=60, fill="x")
         self.pw_error = ctk.CTkLabel(login_panel, text="", text_color="red", anchor="w")
         self.pw_error.pack(pady=(0, 20), padx=60, fill="x")
@@ -64,16 +64,18 @@ class AdminLoginScreen(ctk.CTkFrame):
         ctk.CTkButton(
             btn_frame, text="ログイン", width=150, height=36,
             fg_color="#0d6efd", hover_color="#0b5ed7",
+            font=("Meiryo UI", 15, "bold"),
             command=self.try_login
         ).grid(row=0, column=0, padx=15)
         ctk.CTkButton(
             btn_frame, text="戻る", width=150, height=36,
             fg_color="#adb5bd", hover_color="#999",
+            font=("Meiryo UI", 15, "bold"),
             command=self.go_back
         ).grid(row=0, column=1, padx=15)
 
         # ===== パスワード変更リンク（プレースホルダ） =====
-        link = ctk.CTkLabel(login_panel, text="パスワードを変更する", text_color="#0d6efd", cursor="hand2")
+        link = ctk.CTkLabel(login_panel, text="パスワードを変更する", text_color="#0d6efd", cursor="hand2",font=("Meiryo UI", 15))
         link.pack(pady=(25, 10))
         link.bind("<Button-1>", lambda e: self.show_password_change())
 
